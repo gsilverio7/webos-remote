@@ -15,6 +15,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -34,13 +37,16 @@ fun SettingsDialog(
     initialIp: String,
     initialMac: String,
     initialBroadcast: String,
+    initialHapticEnabled: Boolean,
     onDismiss: () -> Unit,
     onDiscover: ((String) -> Unit) -> Unit,
-    onSave: (ip: String, mac: String, broadcast: String) -> Unit
+    onOpenShortcutsEditor: () -> Unit,
+    onSave: (ip: String, mac: String, broadcast: String, hapticEnabled: Boolean) -> Unit
 ) {
     var ip by remember { mutableStateOf(initialIp) }
     var mac by remember { mutableStateOf(initialMac) }
     var broadcast by remember { mutableStateOf(initialBroadcast) }
+    var hapticEnabled by remember { mutableStateOf(initialHapticEnabled) }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = Color.White,
@@ -66,14 +72,14 @@ fun SettingsDialog(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Conexão direta via Wi-Fi (SSAP WebSocket + Wake-on-LAN)",
+                text = "Conexão Wi-Fi (SSAP WebSocket + Wake-on-LAN), vibração e atalhos",
                 color = Color(0xFFA1A1AA),
-                fontSize = 12.sp
+                fontSize = 11.sp
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             OutlinedTextField(
                 value = ip,
@@ -84,7 +90,7 @@ fun SettingsDialog(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = mac,
@@ -95,7 +101,7 @@ fun SettingsDialog(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = broadcast,
@@ -106,7 +112,56 @@ fun SettingsDialog(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Opção de Vibração Tátil nos Botões
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF0C0D10), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color(0xFF23252C), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Vibração nos Botões",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Emula o toque de um controle físico",
+                        color = Color(0xFFA1A1AA),
+                        fontSize = 10.sp
+                    )
+                }
+                Switch(
+                    checked = hapticEnabled,
+                    onCheckedChange = { hapticEnabled = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFFDC2626),
+                        uncheckedThumbColor = Color(0xFFA1A1AA),
+                        uncheckedTrackColor = Color(0xFF27272A)
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = {
+                    onDismiss()
+                    onOpenShortcutsEditor()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Personalizar os 9 Botões de Atalho", color = Color(0xFFE4E4E7))
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
 
             OutlinedButton(
                 onClick = {
@@ -119,7 +174,7 @@ fun SettingsDialog(
                 Text("Buscar TV na Rede (SSDP)", color = Color(0xFFE4E4E7))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -130,7 +185,7 @@ fun SettingsDialog(
                 }
                 Button(
                     onClick = {
-                        onSave(ip, mac, broadcast)
+                        onSave(ip, mac, broadcast, hapticEnabled)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))

@@ -1,12 +1,21 @@
 package com.lgtv.remote.ui
 
-import android.view.HapticFeedbackConstants
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -25,11 +34,15 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,22 +51,128 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/**
+ * CompositionLocal que indica se o feedback de vibração dos botões está ativado.
+ */
+val LocalHapticEnabled = compositionLocalOf { true }
+
+object RemoteHaptics {
+    private fun getVibrator(context: Context): Vibrator? {
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * Vibração leve e curta que emula o clique mecânico de um botão de controle físico.
+     */
+    fun performTap(context: Context, enabled: Boolean, strong: Boolean = false) {
+        if (!enabled) return
+        val vibrator = getVibrator(context) ?: return
+        if (!vibrator.hasVibrator()) return
+
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val effect = if (strong) {
+                    VibrationEffect.createOneShot(22L, 95)
+                } else {
+                    VibrationEffect.createOneShot(12L, 65)
+                }
+                vibrator.vibrate(effect)
+            } else {
+                val effect = VibrationEffect.createOneShot(
+                    if (strong) 22L else 12L,
+                    if (strong) 100 else 65
+                )
+                vibrator.vibrate(effect)
+            }
+        }
+    }
+}
+
+/**
+ * Renderiza o ícone de um atalho ou app da TV (arquivo local baixado da TV/YouTube, drawable nativo ou ícone padrão).
+ */
+@Composable
+fun ShortcutIconView(
+    customIconPath: String?,
+    @DrawableRes fallbackRes: Int,
+    contentDescription: String,
+    isYouTubeLive: Boolean = false,
+    modifier: Modifier = Modifier.size(18.dp)
+) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, key1 = customIconPath) {
+        value = if (!customIconPath.isNullOrBlank()) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(customIconPath)
+                    if (file.exists() && file.length() > 0) {
+                        BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+                    } else null
+                }.getOrNull()
+            }
+        } else null
+    }
+
+    when {
+        bitmap != null -> {
+            Image(
+                bitmap = bitmap!!,
+                contentDescription = contentDescription,
+                modifier = modifier.clip(RoundedCornerShape(4.dp)),
+                contentScale = ContentScale.Fit
+            )
+        }
+        fallbackRes != 0 -> {
+            Image(
+                painter = painterResource(id = fallbackRes),
+                contentDescription = contentDescription,
+                modifier = modifier,
+                contentScale = ContentScale.Fit
+            )
+        }
+        else -> {
+            Icon(
+                imageVector = if (isYouTubeLive) Icons.Default.LiveTv else Icons.Default.Tv,
+                contentDescription = contentDescription,
+                tint = if (isYouTubeLive) Color(0xFFEF4444) else Color(0xFFE4E4E7),
+                modifier = modifier
+            )
+        }
+    }
+}
 
 /**
  * Botão físico 3D em cinza escuro fosco com chanfro superior iluminado,
  * cavidade rebaixada no chassi e feedback tátil (vibração curta de tecla física).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PhysicalKeyButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(14.dp),
     surfaceTopColor: Color = Color(0xFF32343B),
     surfaceBottomColor: Color = Color(0xFF1E2025),
@@ -63,7 +182,8 @@ fun PhysicalKeyButton(
     contentPadding: PaddingValues = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
     content: @Composable BoxScope.() -> Unit
 ) {
-    val view = LocalView.current
+    val context = LocalContext.current
+    val hapticEnabled = LocalHapticEnabled.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -112,12 +232,18 @@ fun PhysicalKeyButton(
                     ),
                     shape = shape
                 )
-                .clickable(
+                .combinedClickable(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        RemoteHaptics.performTap(context, hapticEnabled, strong = false)
                         onClick()
+                    },
+                    onLongClick = onLongClick?.let { longAction ->
+                        {
+                            RemoteHaptics.performTap(context, hapticEnabled, strong = true)
+                            longAction()
+                        }
                     }
                 )
                 .padding(contentPadding),
@@ -137,7 +263,8 @@ fun PhysicalRedPowerButton(
     modifier: Modifier = Modifier,
     size: Dp = 62.dp
 ) {
-    val view = LocalView.current
+    val context = LocalContext.current
+    val hapticEnabled = LocalHapticEnabled.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -201,7 +328,7 @@ fun PhysicalRedPowerButton(
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        RemoteHaptics.performTap(context, hapticEnabled, strong = true)
                         onClick()
                     }
                 ),
@@ -231,7 +358,8 @@ fun PhysicalCircularDPad(
     modifier: Modifier = Modifier,
     wheelSize: Dp = 196.dp
 ) {
-    val view = LocalView.current
+    val context = LocalContext.current
+    val hapticEnabled = LocalHapticEnabled.current
 
     val upSource = remember { MutableInteractionSource() }
     val downSource = remember { MutableInteractionSource() }
@@ -282,7 +410,6 @@ fun PhysicalCircularDPad(
                 val r = size.minDimension / 2f
                 val center = Offset(size.width / 2f, size.height / 2f)
 
-                // Destaque sutil no quadrante pressionado
                 if (upPressed) {
                     drawArc(
                         color = Color.White.copy(alpha = 0.08f),
@@ -316,7 +443,6 @@ fun PhysicalCircularDPad(
                     )
                 }
 
-                // Linhas diagonais de junção física do anel D-Pad (45°, 135°, 225°, 315°)
                 val diag = r * 0.7071f
                 val grooveColor = Color(0xFF0E0F12)
                 drawLine(
@@ -332,7 +458,6 @@ fun PhysicalCircularDPad(
                     strokeWidth = 3f
                 )
 
-                // Anel interno sutil
                 drawCircle(
                     color = Color(0xFF3E414B),
                     radius = r * 0.74f,
@@ -350,7 +475,7 @@ fun PhysicalCircularDPad(
                         interactionSource = upSource,
                         indication = null,
                         onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            RemoteHaptics.performTap(context, hapticEnabled, strong = false)
                             onUp()
                         }
                     ),
@@ -375,7 +500,7 @@ fun PhysicalCircularDPad(
                         interactionSource = downSource,
                         indication = null,
                         onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            RemoteHaptics.performTap(context, hapticEnabled, strong = false)
                             onDown()
                         }
                     ),
@@ -400,7 +525,7 @@ fun PhysicalCircularDPad(
                         interactionSource = leftSource,
                         indication = null,
                         onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            RemoteHaptics.performTap(context, hapticEnabled, strong = false)
                             onLeft()
                         }
                     ),
@@ -425,7 +550,7 @@ fun PhysicalCircularDPad(
                         interactionSource = rightSource,
                         indication = null,
                         onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            RemoteHaptics.performTap(context, hapticEnabled, strong = false)
                             onRight()
                         }
                     ),
@@ -476,7 +601,7 @@ fun PhysicalCircularDPad(
                             width = 1.2.dp,
                             brush = Brush.verticalGradient(
                                 colors = if (okPressed) {
-                                    listOf(Color(0xFF2E3038), Color(0xFF141519))
+                                    listOf(Color(0xFF2E3038), Color(0xFF121319))
                                 } else {
                                     listOf(Color(0xFF606472), Color(0xFF15161A))
                                 }
@@ -487,7 +612,7 @@ fun PhysicalCircularDPad(
                             interactionSource = okSource,
                             indication = null,
                             onClick = {
-                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                RemoteHaptics.performTap(context, hapticEnabled, strong = true)
                                 onOk()
                             }
                         ),

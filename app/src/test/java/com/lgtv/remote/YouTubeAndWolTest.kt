@@ -36,4 +36,11 @@ class YouTubeAndWolTest {
         assertEquals("0lHP7-dsT58", id3)
         assertEquals("v=0lHP7-dsT58", target3)
     }
+
+    @Test
+    fun `normalizeChannelLiveUrl converts simple channel name or handle to live URL`() {
+        assertEquals("https://www.youtube.com/@sbt/live", YouTubeLiveResolver.normalizeChannelLiveUrl("sbt"))
+        assertEquals("https://www.youtube.com/@sbt/live", YouTubeLiveResolver.normalizeChannelLiveUrl("@sbt"))
+        assertEquals("https://www.youtube.com/@cazetv/live", YouTubeLiveResolver.normalizeChannelLiveUrl("cazetv"))
+    }
 }

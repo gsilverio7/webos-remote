@@ -1,13 +1,18 @@
 package com.lgtv.remote.network
 
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 
 object TvWakeOnLan {
+
+    private val wolScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Constrói o Magic Packet Wake-on-LAN de 102 bytes (6x 0xFF seguidos de 16 repetições do MAC).
@@ -38,7 +43,8 @@ object TvWakeOnLan {
     }
 
     /**
-     * Envia o pacote Wake-on-LAN via UDP broadcast nas portas 9 e 7.
+     * Envia o pacote Wake-on-LAN imediatamente via UDP broadcast nas portas 9 e 7,
+     * disparando rajadas extras em background para garantir entrega imediata na Wi-Fi.
      */
     suspend fun sendWakeOnLan(macAddress: String, broadcastIp: String) = withContext(Dispatchers.IO) {
         val packetBytes = buildMagicPacket(macAddress)
@@ -48,21 +54,34 @@ object TvWakeOnLan {
         )
         val ports = intArrayOf(9, 7)
 
-        DatagramSocket().use { socket ->
-            socket.broadcast = true
-            // Envia 3 rajadas curtas para garantir entrega na Wi-Fi
-            repeat(3) { attempt ->
-                for (host in targets) {
-                    val address = runCatching { InetAddress.getByName(host) }.getOrNull() ?: continue
-                    for (port in ports) {
-                        runCatching {
-                            val datagram = DatagramPacket(packetBytes, packetBytes.size, address, port)
-                            socket.send(datagram)
-                        }
+        val resolvedTargets = targets.mapNotNull { host ->
+            runCatching { InetAddress.getByName(host) }.getOrNull()
+        }
+
+        fun sendBurst(socket: DatagramSocket) {
+            for (address in resolvedTargets) {
+                for (port in ports) {
+                    runCatching {
+                        val datagram = DatagramPacket(packetBytes, packetBytes.size, address, port)
+                        socket.send(datagram)
                     }
                 }
-                if (attempt < 2) {
-                    delay(120)
+            }
+        }
+
+        // Disparo imediato (0ms de espera)
+        DatagramSocket().use { socket ->
+            socket.broadcast = true
+            sendBurst(socket)
+        }
+
+        // Rajadas adicionais de reforço em background sem bloquear a resposta da UI
+        wolScope.launch {
+            DatagramSocket().use { socket ->
+                socket.broadcast = true
+                repeat(3) {
+                    delay(70)
+                    sendBurst(socket)
                 }
             }
         }

@@ -1,5 +1,6 @@
 package com.lgtv.remote.network
 
+import com.lgtv.remote.data.TvInstalledApp
 import com.lgtv.remote.data.TvPreferences
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,9 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.concurrent.ConcurrentHashMap
@@ -77,7 +81,7 @@ class LgWebOsClient(
         OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
             .hostnameVerifier { _, _ -> true }
-            .connectTimeout(3, TimeUnit.SECONDS)
+            .connectTimeout(2500, TimeUnit.MILLISECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // WebSocket keep-alive
             .pingInterval(15, TimeUnit.SECONDS)
             .build()
@@ -100,10 +104,19 @@ class LgWebOsClient(
         _state.update { it.copy(feedbackMessage = message) }
     }
 
+    private fun isPortReachable(ip: String, port: Int, timeoutMs: Int = 650): Boolean {
+        return runCatching {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(ip, port), timeoutMs)
+                true
+            }
+        }.getOrDefault(false)
+    }
+
     /**
      * Garante que a conexão WebSocket SSAP esteja ativa e pareada com a TV LG.
      */
-    suspend fun ensureConnected(timeoutMs: Long = 3500): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun ensureConnected(timeoutMs: Long = 2800): Result<Unit> = withContext(Dispatchers.IO) {
         val current = _state.value
         if (current.connected && current.paired && mainWebSocket != null) {
             return@withContext Result.success(Unit)
@@ -124,13 +137,20 @@ class LgWebOsClient(
 
         if (targetIp.isBlank()) {
             setFeedback("Buscando TV LG na rede via SSDP...")
-            val discovered = TvSsdpDiscovery.discoverLgTv(3000)
+            val discovered = TvSsdpDiscovery.discoverLgTv(2500)
             if (discovered != null) {
                 targetIp = discovered.ip
                 preferences.saveIpAddress(targetIp)
             } else {
                 return Result.failure(IllegalStateException("TV não encontrada na rede Wi-Fi"))
             }
+        }
+
+        // Checagem rápida TCP para não travar quando a TV estiver em standby
+        val reachable3001 = isPortReachable(targetIp, 3001, 600)
+        val reachable3000 = if (!reachable3001) isPortReachable(targetIp, 3000, 600) else true
+        if (!reachable3001 && !reachable3000) {
+            return Result.failure(IllegalStateException("TV em standby ($targetIp)"))
         }
 
         closeSocketsInternal()
@@ -145,10 +165,14 @@ class LgWebOsClient(
             )
         }
 
-        val endpoints = listOf(
-            "wss://$targetIp:3001",
-            "ws://$targetIp:3000"
-        )
+        val endpoints = buildList {
+            if (reachable3001) add("wss://$targetIp:3001")
+            if (reachable3000) add("ws://$targetIp:3000")
+            if (isEmpty()) {
+                add("wss://$targetIp:3001")
+                add("ws://$targetIp:3000")
+            }
+        }
 
         var openedWs: WebSocket? = null
         for (url in endpoints) {
@@ -211,7 +235,7 @@ class LgWebOsClient(
             return Result.failure(IllegalStateException("Erro ao enviar registro para a TV"))
         }
 
-        val firstResp = withTimeoutOrNull(15_000L) { regDeferred.await() }
+        val firstResp = withTimeoutOrNull(12_000L) { regDeferred.await() }
             ?: run {
                 pendingResponses.remove(regId)
                 return Result.failure(IllegalStateException("Tempo esgotado aguardando registro na TV"))
@@ -222,7 +246,6 @@ class LgWebOsClient(
             handleRegisteredPayload(firstResp.optJSONObject("payload"))
             return Result.success(Unit)
         } else if (respType == "response") {
-            // Prompt de confirmação exibido na TV
             _state.update {
                 it.copy(
                     prompting = true,
@@ -259,6 +282,10 @@ class LgWebOsClient(
         }
         scope.launch {
             runCatching { fetchAudioStatus() }
+            runCatching {
+                // Registra teclado remoto para manter canal de IME pronto na TV
+                sendCommand("ssap://com.webos.service.ime/registerRemoteKeyboard", null, 2000)
+            }
         }
     }
 
@@ -326,7 +353,7 @@ class LgWebOsClient(
     suspend fun sendCommand(
         uri: String,
         payload: JSONObject? = null,
-        timeoutMs: Long = 4000
+        timeoutMs: Long = 3500
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         val connResult = ensureConnected()
         if (connResult.isFailure) {
@@ -373,27 +400,20 @@ class LgWebOsClient(
     }
 
     /**
-     * Botão Único de Energia (Power Toggle):
-     * - Se a TV estiver ligada/conectada -> Envia comando SSAP para desligar (ssap://system/turnOff).
-     * - Se a TV estiver em standby/desconectada -> Envia Magic Packet Wake-on-LAN para ligar.
+     * Botão Único de Energia (Power Toggle) ultra-rápido:
+     * - Se já estiver conectado -> Desliga via SSAP imediatamente.
+     * - Se não estiver conectado -> Dispara o Magic Packet Wake-on-LAN IMEDIATAMENTE (sem esperar
+     *   timeout de WebSocket ou mutex), ligando a TV no menor tempo possível.
      */
     suspend fun togglePower(): Result<String> = withContext(Dispatchers.IO) {
         val currentlyConnected = _state.value.connected && _state.value.paired
-        val canReachTv = if (currentlyConnected) {
-            true
-        } else {
-            // Tenta uma conexão rápida de 1.2s para checar se a TV já está ligada
-            ensureConnected(timeoutMs = 1200).isSuccess
-        }
-
-        if (canReachTv) {
+        if (currentlyConnected) {
             val offRes = powerOff()
             if (offRes.isSuccess) {
                 return@withContext Result.success("Desligando a TV...")
             }
         }
 
-        // TV está desligada / standby -> envia Wake-on-LAN
         val cfg = preferences.getConfig()
         if (cfg.macAddress.isBlank()) {
             return@withContext Result.failure(
@@ -402,23 +422,25 @@ class LgWebOsClient(
         }
 
         return@withContext runCatching {
+            // Disparo imediato do pacote Wake-on-LAN (0ms de espera)
             TvWakeOnLan.sendWakeOnLan(cfg.macAddress, cfg.broadcastAddress)
-            // Agenda tentativas automáticas de conexão enquanto a TV liga
+
+            // Em paralelo, verifica se a TV liga e conecta assim que ficar pronta
             scope.launch {
-                repeat(6) { attempt ->
-                    delay(3000L + attempt * 1000L)
-                    if (ensureConnected(2500).isSuccess) {
+                repeat(8) { attempt ->
+                    delay(1800L + attempt * 800L)
+                    if (ensureConnected(2000).isSuccess) {
                         setFeedback("TV LG conectada!")
                         return@launch
                     }
                 }
             }
-            "Sinal para ligar (Wake-on-LAN) enviado!"
+            "Wake-on-LAN enviado! Ligando TV..."
         }
     }
 
     suspend fun powerOff(): Result<Unit> {
-        val res = sendCommand("ssap://system/turnOff", null, 3000)
+        val res = sendCommand("ssap://system/turnOff", null, 2500)
         return if (res.isSuccess) {
             closeSocketsInternal()
             _state.update {
@@ -439,6 +461,14 @@ class LgWebOsClient(
 
     suspend fun volumeDown(): Result<Unit> =
         sendCommand("ssap://audio/volumeDown", null, 2000).map { }
+
+    suspend fun setVolume(volume: Int): Result<Unit> {
+        val target = volume.coerceIn(0, 100)
+        val payload = JSONObject().put("volume", target)
+        return sendCommand("ssap://audio/setVolume", payload, 2000).map {
+            _state.update { s -> s.copy(volume = target) }
+        }
+    }
 
     suspend fun fetchAudioStatus(): Result<Pair<Int, Boolean>> {
         val res = sendCommand("ssap://audio/getVolume", null, 2000)
@@ -469,25 +499,35 @@ class LgWebOsClient(
                 put("contentId", contentId)
             }
         }
-        val first = sendCommand("ssap://system.launcher/open", payload, 4000)
+        val first = sendCommand("ssap://system.launcher/open", payload, 3500)
         if (first.isSuccess) return Result.success(Unit)
 
-        return sendCommand("ssap://com.webos.applicationManager/launch", payload, 4000).map { }
+        return sendCommand("ssap://com.webos.applicationManager/launch", payload, 3500).map { }
     }
 
     /**
-     * Abre uma URL/Live diretamente no aplicativo oficial do YouTube da TV (youtube.leanback.v4).
+     * Abre uma URL, canal (@handle) ou Live diretamente no aplicativo oficial do YouTube da TV.
      */
     suspend fun launchYouTubeUrl(videoOrChannelUrl: String): Result<Unit> = withContext(Dispatchers.IO) {
         val contentTarget = YouTubeLiveResolver.resolveContentTarget(videoOrChannelUrl)
+        launchYouTubeWithContentTarget(contentTarget)
+    }
 
-        // Fecha eventual instância já aberta do YouTube na TV antes de lançar o novo vídeo,
-        // garantindo que o webOS carregue o novo contentTarget em vez de apenas focar a Home.
+    /**
+     * Pesquisa por um termo no YouTube e abre o vídeo/live correspondente diretamente na TV.
+     */
+    suspend fun searchAndLaunchYouTube(query: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val contentTarget = YouTubeLiveResolver.resolveSearchQueryTarget(query)
+            ?: return@withContext Result.failure(IllegalStateException("Nenhum vídeo encontrado para \"$query\""))
+        launchYouTubeWithContentTarget(contentTarget)
+    }
+
+    private suspend fun launchYouTubeWithContentTarget(contentTarget: String): Result<Unit> {
         val closePayload = JSONObject().put("id", "youtube.leanback.v4")
-        if (sendCommand("ssap://system.launcher/close", closePayload, 2000).isFailure) {
-            sendCommand("ssap://com.webos.applicationManager/close", closePayload, 2000)
+        if (sendCommand("ssap://system.launcher/close", closePayload, 1800).isFailure) {
+            sendCommand("ssap://com.webos.applicationManager/close", closePayload, 1800)
         }
-        delay(600)
+        delay(500)
 
         val launchPayload = JSONObject().apply {
             put("id", "youtube.leanback.v4")
@@ -495,10 +535,146 @@ class LgWebOsClient(
             put("params", JSONObject().put("contentTarget", contentTarget))
         }
 
-        val first = sendCommand("ssap://system.launcher/launch", launchPayload, 4000)
-        if (first.isSuccess) return@withContext Result.success(Unit)
+        val first = sendCommand("ssap://system.launcher/launch", launchPayload, 3500)
+        if (first.isSuccess) return Result.success(Unit)
 
-        sendCommand("ssap://com.webos.applicationManager/launch", launchPayload, 4000).map { }
+        return sendCommand("ssap://com.webos.applicationManager/launch", launchPayload, 3500).map { }
+    }
+
+    /**
+     * Consulta na própria TV LG os aplicativos instalados (launchPoints + listApps)
+     * e faz o download dos ícones reais fornecidos pela TV para cache local.
+     */
+    suspend fun fetchInstalledApps(iconsDir: File): Result<List<TvInstalledApp>> = withContext(Dispatchers.IO) {
+        if (!iconsDir.exists()) {
+            iconsDir.mkdirs()
+        }
+
+        val appsById = linkedMapOf<String, TvInstalledApp>()
+
+        // 1. Tenta listLaunchPoints (traz os apps visíveis na barra Home da TV e URLs de ícones HTTP/HTTPS)
+        val lpRes = sendCommand("ssap://com.webos.applicationManager/listLaunchPoints", null, 4500)
+        lpRes.onSuccess { json ->
+            val points = json.optJSONObject("payload")?.optJSONArray("launchPoints") ?: JSONArray()
+            for (i in 0 until points.length()) {
+                val item = points.optJSONObject(i) ?: continue
+                val id = item.optString("id").trim()
+                val title = item.optString("title").trim()
+                val visible = item.optBoolean("visible", true)
+                if (id.isEmpty() || title.isEmpty() || !visible) continue
+                val iconUrl = item.optString("icon")
+                    .ifEmpty { item.optString("largeIcon") }
+                    .ifEmpty { item.optString("miniicon") }
+                appsById[id] = TvInstalledApp(appId = id, title = title, iconUrl = iconUrl)
+            }
+        }
+
+        // 2. Complementa com listApps
+        val appsRes = sendCommand("ssap://com.webos.applicationManager/listApps", null, 4500)
+        appsRes.onSuccess { json ->
+            val apps = json.optJSONObject("payload")?.optJSONArray("apps") ?: JSONArray()
+            for (i in 0 until apps.length()) {
+                val item = apps.optJSONObject(i) ?: continue
+                val id = item.optString("id").trim()
+                val title = item.optString("title").trim()
+                val visible = item.optBoolean("visible", true)
+                if (id.isEmpty() || title.isEmpty() || !visible) continue
+                if (!appsById.containsKey(id)) {
+                    val iconUrl = item.optString("icon")
+                        .ifEmpty { item.optString("largeIcon") }
+                        .ifEmpty { item.optString("miniicon") }
+                    appsById[id] = TvInstalledApp(appId = id, title = title, iconUrl = iconUrl)
+                }
+            }
+        }
+
+        if (appsById.isEmpty()) {
+            val err = lpRes.exceptionOrNull() ?: appsRes.exceptionOrNull()
+                ?: IllegalStateException("Não foi possível listar os apps da TV")
+            return@withContext Result.failure(err)
+        }
+
+        // Faz o download dos ícones diretamente da TV para o cache local do celular
+        val resultList = appsById.values
+            .sortedBy { it.title.lowercase() }
+            .map { app ->
+                val safeName = app.appId.replace(Regex("[^a-zA-Z0-9._-]"), "_") + ".png"
+                val iconFile = File(iconsDir, safeName)
+                val localPath = if (iconFile.exists() && iconFile.length() > 0) {
+                    iconFile.absolutePath
+                } else if (app.iconUrl.startsWith("http")) {
+                    downloadFile(app.iconUrl, iconFile)
+                } else {
+                    null
+                }
+                app.copy(localIconPath = localPath)
+            }
+
+        preferences.saveCachedInstalledApps(resultList)
+        Result.success(resultList)
+    }
+
+    /**
+     * Baixa uma imagem/ícone (da TV ou do YouTube) e salva no arquivo de destino.
+     */
+    suspend fun downloadFile(url: String, destFile: File): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            destFile.parentFile?.mkdirs()
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0")
+                .get()
+                .build()
+            insecureOkHttpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@runCatching null
+                val bytes = resp.body?.bytes() ?: return@runCatching null
+                if (bytes.isEmpty()) return@runCatching null
+                destFile.writeBytes(bytes)
+                destFile.absolutePath
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * Envia texto digitado (ou ditado por voz) no celular diretamente para o campo de texto da TV.
+     */
+    suspend fun sendTextInput(
+        text: String,
+        replace: Boolean = false,
+        pressEnter: Boolean = false
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val payload = JSONObject().apply {
+            put("text", text)
+            put("replace", if (replace) 1 else 0)
+        }
+        val res = sendCommand("ssap://com.webos.service.ime/insertText", payload, 3000)
+        if (res.isFailure) {
+            return@withContext Result.failure(
+                res.exceptionOrNull() ?: IllegalStateException("Erro ao enviar texto para a TV")
+            )
+        }
+        if (pressEnter) {
+            delay(150)
+            sendCommand("ssap://com.webos.service.ime/sendEnterKey", null, 2000)
+        }
+        Result.success(Unit)
+    }
+
+    /**
+     * Pressiona Enter/Confirmar no teclado virtual da TV.
+     */
+    suspend fun sendImeEnter(): Result<Unit> = withContext(Dispatchers.IO) {
+        val res = sendCommand("ssap://com.webos.service.ime/sendEnterKey", null, 2000)
+        if (res.isSuccess) return@withContext Result.success(Unit)
+        sendButton("ENTER")
+    }
+
+    /**
+     * Apaga caracteres (Backspace) no campo de texto ativo da TV.
+     */
+    suspend fun deleteTextCharacters(count: Int = 1): Result<Unit> = withContext(Dispatchers.IO) {
+        val payload = JSONObject().put("count", count.coerceAtLeast(1))
+        sendCommand("ssap://com.webos.service.ime/deleteCharacters", payload, 2000).map { }
     }
 
     /**
