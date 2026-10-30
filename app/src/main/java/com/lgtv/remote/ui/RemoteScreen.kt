@@ -207,7 +207,7 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                         }
                         Spacer(modifier = Modifier.height(5.dp))
                         Text(
-                            text = "CFG",
+                            text = "CONFIG",
                             color = Color(0xFF71717A),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,

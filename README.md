@@ -17,6 +17,59 @@ Aplicativo Android nativo desenvolvido em **Kotlin + Jetpack Compose** para cont
 
 ## Como Abrir e Compilar
 
-1. Abra o **Android Studio** e selecione **Open** apontando diretamente para a pasta `mobile/`.
-2. O Android Studio sincronizará o projeto Gradle e baixará o wrapper/dependências automaticamente.
-3. Conecte seu celular Android (ou emulador na mesma rede Wi-Fi) e clique em **Run (`▶`)**.
+### Opção 1: Pelo Android Studio (Interface Gráfica)
+
+1. Abra o **Android Studio** e selecione **Open** apontando para a pasta raiz do projeto (`webos-remote`).
+2. O Android Studio sincronizará o projeto Gradle automaticamente.
+3. No seletor de dispositivos no topo, escolha o emulador (ex: `Pixel 5`) ou seu celular físico.
+4. Clique no botão de **Run (`▶`)** ou pressione `Shift + F10`.
+
+---
+
+### Opção 2: Pelo Terminal (PowerShell / CMD)
+
+Se preferir rodar diretamente via linha de comando usando o emulador e ADB já instalados:
+
+#### 0. Gerar build (apk)
+
+- Versão Debug 
+```powershell
+gradle assembleDebug
+```
+
+- Versão Release 
+```powershell
+gradle assembleRelease
+```
+
+#### 1. (Opcional) Adicionar ferramentas do SDK ao PATH temporário
+```powershell
+$env:PATH += ";$env:LOCALAPPDATA\Android\Sdk\emulator;$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+```
+
+#### 2. Listar os emuladores disponíveis
+```powershell
+emulator -list-avds
+# Exemplo de saída: Pixel_5
+```
+
+#### 3. Iniciar o emulador desejado
+```powershell
+emulator -avd Pixel_5
+```
+
+#### 4. Verificar se o emulador foi reconhecido pelo ADB
+```powershell
+adb devices
+# Deve listar: emulator-5554    device
+```
+
+#### 5. Instalar o APK compilado
+```powershell
+adb install -r app\build\outputs\apk\release\app-release.apk
+```
+
+#### 6. Abrir o aplicativo na tela do emulador
+```powershell
+adb shell am start -n com.lgtv.remote/.MainActivity
+```
