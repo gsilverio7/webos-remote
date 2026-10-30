@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Corpo do Controle Remoto -->
+    <path
+        android:fillColor="#242529"
+        android:strokeColor="#3E4047"
+        android:strokeWidth="1.5"
+        android:pathData="M42,24 C38,24 35,27 35,31 L35,77 C35,81 38,84 42,84 L66,84 C70,84 73,81 73,77 L73,31 C73,27 70,24 66,24 Z" />
+    <!-- Botão Power Vermelho -->
+    <path
+        android:fillColor="#DC2626"
+        android:pathData="M54,34 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0" />
+    <!-- D-Pad Circular -->
+    <path
+        android:fillColor="#16171A"
+        android:strokeColor="#3A3C42"
+        android:strokeWidth="1.2"
+        android:pathData="M54,53 m-11,0 a11,11 0 1,1 22,0 a11,11 0 1,1 -22,0" />
+    <!-- Botão OK Central -->
+    <path
+        android:fillColor="#2E3036"
+        android:pathData="M54,53 m-4.5,0 a4.5,4.5 0 1,1 9,0 a4.5,4.5 0 1,1 -9,0" />
+</vector>
