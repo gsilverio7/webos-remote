@@ -1,4 +1,4 @@
-package com.lgtv.remote.network
+package io.github.gsilverio7.webosremote.network
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

@@ -7,7 +7,7 @@ Aplicativo Android nativo desenvolvido em **Kotlin + Jetpack Compose** para cont
 - **Design de Controle Remoto Físico Realista:**
   - Chassi em preto fosco com chanfro metálico, visor OLED de status e LED infravermelho no topo.
   - Teclas físicas 3D em cinza escuro (`#32343B` → `#1E2025`) com afundamento mecânico ao toque e resposta tátil (vibração curta).
-  - **Botão Power Vermelho Unificado:** Um único botão circular vermelho em destaque que **liga** a TV via *Wake-on-LAN* (quando em standby) e **desliga** a TV via *SSAP* (`ssap://system/turnOff`) quando ligada.
+  - **Botão Power Vermelho Unificado:** Um único botão circular vermelho em destaque que **liga** a TV via _Wake-on-LAN_ (quando em standby) e **desliga** a TV via _SSAP_ (`ssap://system/turnOff`) quando ligada.
   - **D-Pad Circular Esculpido:** Anel direcional físico (Cima, Baixo, Esquerda, Direita) com sulcos diagonais e botão central **OK**.
 - **Comunicação Direta com a TV LG:**
   - **SSAP WebSocket** seguro (`wss://<IP>:3001` com suporte a certificado autoassinado da LG e fallback para `ws://<IP>:3000`).
@@ -32,44 +32,56 @@ Se preferir rodar diretamente via linha de comando usando o emulador e ADB já i
 
 #### 0. Gerar build (apk)
 
-- Versão Debug 
+- Versão Debug
+
 ```powershell
 gradle assembleDebug
 ```
 
-- Versão Release 
+- Versão Release
+
 ```powershell
 gradle assembleRelease
 ```
 
 #### 1. (Opcional) Adicionar ferramentas do SDK ao PATH temporário
+
 ```powershell
 $env:PATH += ";$env:LOCALAPPDATA\Android\Sdk\emulator;$env:LOCALAPPDATA\Android\Sdk\platform-tools"
 ```
 
 #### 2. Listar os emuladores disponíveis
+
 ```powershell
 emulator -list-avds
 # Exemplo de saída: Pixel_5
 ```
 
 #### 3. Iniciar o emulador desejado
+
 ```powershell
 emulator -avd Pixel_5
 ```
 
 #### 4. Verificar se o emulador foi reconhecido pelo ADB
+
 ```powershell
 adb devices
 # Deve listar: emulator-5554    device
 ```
 
 #### 5. Instalar o APK compilado
+
 ```powershell
 adb install -r app\build\outputs\apk\release\app-release.apk
 ```
 
 #### 6. Abrir o aplicativo na tela do emulador
+
 ```powershell
-adb shell am start -n com.lgtv.remote/.MainActivity
+adb shell am start -n io.github.gsilverio7.webosremote/.MainActivity
 ```
+
+#### 7. Para desenvolvimento
+
+.\gradlew installDebug; adb shell am start -n io.github.gsilverio7.webosremote/.MainActivity

@@ -1,7 +1,7 @@
-package com.lgtv.remote.network
+package io.github.gsilverio7.webosremote.network
 
-import com.lgtv.remote.data.TvInstalledApp
-import com.lgtv.remote.data.TvPreferences
+import io.github.gsilverio7.webosremote.data.TvInstalledApp
+import io.github.gsilverio7.webosremote.data.TvPreferences
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

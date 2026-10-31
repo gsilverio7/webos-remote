@@ -1,4 +1,4 @@
-package com.lgtv.remote.data
+package io.github.gsilverio7.webosremote.data
 
 import android.content.Context
 import android.content.SharedPreferences

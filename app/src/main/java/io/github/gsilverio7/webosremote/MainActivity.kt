@@ -1,4 +1,4 @@
-package com.lgtv.remote
+package io.github.gsilverio7.webosremote
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,8 +10,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.lgtv.remote.ui.RemoteScreen
-import com.lgtv.remote.ui.RemoteViewModel
+import io.github.gsilverio7.webosremote.ui.RemoteScreen
+import io.github.gsilverio7.webosremote.ui.RemoteViewModel
 
 private val RemoteDarkColors = darkColorScheme(
     primary = Color(0xFFEF4444),

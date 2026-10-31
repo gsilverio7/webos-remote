@@ -1,4 +1,4 @@
-package com.lgtv.remote.ui
+package io.github.gsilverio7.webosremote.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

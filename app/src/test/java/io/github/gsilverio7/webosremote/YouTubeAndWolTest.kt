@@ -1,7 +1,7 @@
-package com.lgtv.remote
+package io.github.gsilverio7.webosremote
 
-import com.lgtv.remote.network.TvWakeOnLan
-import com.lgtv.remote.network.YouTubeLiveResolver
+import io.github.gsilverio7.webosremote.network.TvWakeOnLan
+import io.github.gsilverio7.webosremote.network.YouTubeLiveResolver
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

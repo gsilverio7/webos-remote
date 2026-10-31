@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.lgtv.remote"
+    namespace = "io.github.gsilverio7.webosremote"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.lgtv.remote"
+        applicationId = "io.github.gsilverio7.webosremote"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

@@ -1,4 +1,4 @@
-package com.lgtv.remote.ui
+package io.github.gsilverio7.webosremote.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,7 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lgtv.remote.data.ShortcutActionType
+import io.github.gsilverio7.webosremote.data.ShortcutActionType
 
 @Composable
 fun RemoteScreen(viewModel: RemoteViewModel) {

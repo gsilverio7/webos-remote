@@ -1,4 +1,4 @@
-package com.lgtv.remote.ui
+package io.github.gsilverio7.webosremote.ui
 
 import android.content.Context
 import android.graphics.BitmapFactory
