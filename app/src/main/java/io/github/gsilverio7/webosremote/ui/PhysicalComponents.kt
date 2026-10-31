@@ -618,18 +618,7 @@ fun PhysicalCircularDPad(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "OK",
-                            color = Color(0xFFF4F4F5),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.2.sp
-                        )
-                    }
+                    // Centro físico do D-Pad sem texto (relevo tátil minimalista)
                 }
             }
         }

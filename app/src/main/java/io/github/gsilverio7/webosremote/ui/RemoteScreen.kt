@@ -308,22 +308,19 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                             .weight(1f)
                             .height(50.dp),
                         shape = RoundedCornerShape(14.dp),
-                        surfaceTopColor = Color(0xFF3A2024),
-                        surfaceBottomColor = Color(0xFF221316),
-                        bevelHighlightColor = Color(0xFF6E353C),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Controle por Voz / IA",
-                                tint = Color(0xFFFCA5A5),
+                                tint = Color(0xFFE4E4E7),
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "VOZ / IA",
-                                color = Color(0xFFFECACA),
+                                color = Color(0xFFE4E4E7),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.5.sp
@@ -428,9 +425,13 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                             .height(52.dp),
                         shape = RoundedCornerShape(16.dp),
                         surfaceTopColor = if (state.muted) Color(0xFF451A1A) else Color(0xFF2B2D33),
-                        surfaceBottomColor = if (state.muted) Color(0xFF2A1010) else Color(0xFF1A1B20)
+                        surfaceBottomColor = if (state.muted) Color(0xFF2A1010) else Color(0xFF1A1B20),
+                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
                             Icon(
                                 imageVector = if (state.muted) {
                                     Icons.AutoMirrored.Filled.VolumeOff
@@ -439,14 +440,16 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                                 },
                                 contentDescription = "Mudo",
                                 tint = if (state.muted) Color(0xFFFCA5A5) else Color(0xFFD4D4D8),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
+                            Spacer(modifier = Modifier.height(1.dp))
                             Text(
                                 text = "MUDO",
                                 color = if (state.muted) Color(0xFFFCA5A5) else Color(0xFFA1A1AA),
-                                fontSize = 9.sp,
+                                fontSize = 8.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp
+                                letterSpacing = 0.4.sp,
+                                maxLines = 1
                             )
                         }
                     }
