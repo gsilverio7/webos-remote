@@ -462,6 +462,12 @@ class LgWebOsClient(
     suspend fun volumeDown(): Result<Unit> =
         sendCommand("ssap://audio/volumeDown", null, 2000).map { }
 
+    suspend fun channelUp(): Result<Unit> =
+        sendCommand("ssap://tv/channelUp", null, 2000).map { }
+
+    suspend fun channelDown(): Result<Unit> =
+        sendCommand("ssap://tv/channelDown", null, 2000).map { }
+
     suspend fun setVolume(volume: Int): Result<Unit> {
         val target = volume.coerceIn(0, 100)
         val payload = JSONObject().put("volume", target)

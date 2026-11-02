@@ -172,6 +172,7 @@ fun ShortcutIconView(
 fun PhysicalKeyButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onLongClick: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(14.dp),
     surfaceTopColor: Color = Color(0xFF32343B),
@@ -233,6 +234,7 @@ fun PhysicalKeyButton(
                     shape = shape
                 )
                 .combinedClickable(
+                    enabled = enabled,
                     interactionSource = interactionSource,
                     indication = null,
                     onClick = {

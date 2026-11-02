@@ -255,7 +255,7 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // ==================== D-PAD CIRCULAR FÍSICO + OK ====================
                 PhysicalCircularDPad(
@@ -267,221 +267,342 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                     wheelSize = 186.dp
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // ==================== LINHA DE NAVEGAÇÃO + VOZ/IA + TECLADO ====================
+                // ==================== SEÇÃO PRINCIPAL DE COMANDOS ====================
+                // Esquerda: Voltar acima de Canal (+/-)
+                // Centro: 4 botões (Voz, Teclado, Mudo, Em Branco)
+                // Direita: Home acima de Volume (+/-)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // VOLTAR
-                    PhysicalKeyButton(
-                        onClick = { viewModel.onNavigationButton("BACK", "↩ Voltar") },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Undo,
-                                contentDescription = "Voltar",
-                                tint = Color(0xFFE4E4E7),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "VOLTAR",
-                                color = Color(0xFFE4E4E7),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-
-                    // VOZ / IA (Microfone do celular)
-                    PhysicalKeyButton(
-                        onClick = { showVoiceDialog = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = "Controle por Voz / IA",
-                                tint = Color(0xFFE4E4E7),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "VOZ / IA",
-                                color = Color(0xFFE4E4E7),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-
-                    // TECLADO (Digitar pelo celular na TV)
-                    PhysicalKeyButton(
-                        onClick = { showKeyboardDialog = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Keyboard,
-                                contentDescription = "Teclado para TV",
-                                tint = Color(0xFFE4E4E7),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "TECLADO",
-                                color = Color(0xFFE4E4E7),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-
-                    // HOME
-                    PhysicalKeyButton(
-                        onClick = { viewModel.onNavigationButton("HOME", "⌂ Home") },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Home",
-                                tint = Color(0xFFE4E4E7),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "HOME",
-                                color = Color(0xFFE4E4E7),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // ==================== LINHA DE ÁUDIO FÍSICA (VOL - / MUDO / VOL +) ====================
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // VOL -
-                    PhysicalKeyButton(
-                        onClick = { viewModel.onVolumeDown() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp)
+                    // COLUNA ESQUERDA: VOLTAR + CANAL + / CANAL -
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Remove,
-                                contentDescription = "Volume Menos",
-                                tint = Color(0xFFE4E4E7),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "VOL",
-                                color = Color(0xFFD4D4D8),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
-                    }
-
-                    // MUDO
-                    PhysicalKeyButton(
-                        onClick = { viewModel.onMuteToggle() },
-                        modifier = Modifier
-                            .weight(0.9f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        surfaceTopColor = if (state.muted) Color(0xFF451A1A) else Color(0xFF2B2D33),
-                        surfaceBottomColor = if (state.muted) Color(0xFF2A1010) else Color(0xFF1A1B20),
-                        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        // VOLTAR (Acima dos botões de canal)
+                        PhysicalKeyButton(
+                            onClick = { viewModel.onNavigationButton("BACK", "↩ Voltar") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = if (state.muted) {
-                                    Icons.AutoMirrored.Filled.VolumeOff
-                                } else {
-                                    Icons.AutoMirrored.Filled.VolumeUp
-                                },
-                                contentDescription = "Mudo",
-                                tint = if (state.muted) Color(0xFFFCA5A5) else Color(0xFFD4D4D8),
-                                modifier = Modifier.size(17.dp)
-                            )
-                            Spacer(modifier = Modifier.height(1.dp))
-                            Text(
-                                text = "MUDO",
-                                color = if (state.muted) Color(0xFFFCA5A5) else Color(0xFFA1A1AA),
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.4.sp,
-                                maxLines = 1
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Undo,
+                                    contentDescription = "Voltar",
+                                    tint = Color(0xFFE4E4E7),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "VOLTAR",
+                                    color = Color(0xFFE4E4E7),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        // CANAL +
+                        PhysicalKeyButton(
+                            onClick = { viewModel.onChannelUp() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Canal Mais",
+                                    tint = Color(0xFFE4E4E7),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "CH +",
+                                    color = Color(0xFFE4E4E7),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        // CANAL -
+                        PhysicalKeyButton(
+                            onClick = { viewModel.onChannelDown() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Remove,
+                                    contentDescription = "Canal Menos",
+                                    tint = Color(0xFFE4E4E7),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "CH −",
+                                    color = Color(0xFFE4E4E7),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
                         }
                     }
 
-                    // VOL +
-                    PhysicalKeyButton(
-                        onClick = { viewModel.onVolumeUp() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp)
+                    // COLUNA CENTRAL: ESPAÇO DE 4 BOTÕES (VOZ, TECLADO, MUDO, EM BRANCO)
+                    Column(
+                        modifier = Modifier.weight(2f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "VOL",
-                                color = Color(0xFFD4D4D8),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.8.sp
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Volume Mais",
-                                tint = Color(0xFFE4E4E7),
-                                modifier = Modifier.size(20.dp)
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // VOZ / IA
+                            PhysicalKeyButton(
+                                onClick = { showVoiceDialog = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mic,
+                                        contentDescription = "Controle por Voz / IA",
+                                        tint = Color(0xFFE4E4E7),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "VOZ / IA",
+                                        color = Color(0xFFE4E4E7),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                            }
+
+                            // TECLADO
+                            PhysicalKeyButton(
+                                onClick = { showKeyboardDialog = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Keyboard,
+                                        contentDescription = "Teclado para TV",
+                                        tint = Color(0xFFE4E4E7),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "TECLADO",
+                                        color = Color(0xFFE4E4E7),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // MUDO (mesmo formato dos botões de voz, teclado, home e voltar)
+                            PhysicalKeyButton(
+                                onClick = { viewModel.onMuteToggle() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                surfaceTopColor = if (state.muted) Color(0xFF451A1A) else Color(0xFF32343B),
+                                surfaceBottomColor = if (state.muted) Color(0xFF2A1010) else Color(0xFF1E2025),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (state.muted) {
+                                            Icons.AutoMirrored.Filled.VolumeOff
+                                        } else {
+                                            Icons.AutoMirrored.Filled.VolumeUp
+                                        },
+                                        contentDescription = "Mudo",
+                                        tint = if (state.muted) Color(0xFFFCA5A5) else Color(0xFFE4E4E7),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "MUDO",
+                                        color = if (state.muted) Color(0xFFFCA5A5) else Color(0xFFE4E4E7),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                            }
+
+                            // BOTÃO EM BRANCO (reservado para futuras funções)
+                            PhysicalKeyButton(
+                                onClick = { },
+                                enabled = false,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                surfaceTopColor = Color(0xFF222328),
+                                surfaceBottomColor = Color(0xFF15161A),
+                                bevelHighlightColor = Color(0xFF30323A),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                            ) {
+                                // Deixado em branco por enquanto
+                            }
+                        }
+                    }
+
+                    // COLUNA DIREITA: HOME + VOL + / VOL -
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // HOME (Acima dos botões de volume)
+                        PhysicalKeyButton(
+                            onClick = { viewModel.onNavigationButton("HOME", "⌂ Home") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Home",
+                                    tint = Color(0xFFE4E4E7),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "HOME",
+                                    color = Color(0xFFE4E4E7),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        // VOL +
+                        PhysicalKeyButton(
+                            onClick = { viewModel.onVolumeUp() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Volume Mais",
+                                    tint = Color(0xFFE4E4E7),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "VOL +",
+                                    color = Color(0xFFE4E4E7),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+
+                        // VOL -
+                        PhysicalKeyButton(
+                            onClick = { viewModel.onVolumeDown() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Remove,
+                                    contentDescription = "Volume Menos",
+                                    tint = Color(0xFFE4E4E7),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "VOL −",
+                                    color = Color(0xFFE4E4E7),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // ==================== GRADE 3x3 DE TECLAS FÍSICAS DE APPS / CANAIS CONFIGURÁVEIS ====================
                 Column(
@@ -534,16 +655,8 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Rodapé do controle com dica sutil de edição
+                // Rodapé do controle
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "SEGURE UM ATALHO PARA CONFIGURAR",
-                        color = Color(0xFF3F3F46),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "LG webOS SMART REMOTE",
                         color = Color(0xFF52525B),

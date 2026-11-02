@@ -190,6 +190,30 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun onChannelUp() {
+        pulseIrLed()
+        viewModelScope.launch {
+            tvClient.setFeedback("Canal +")
+            tvClient.channelUp().onFailure {
+                tvClient.sendButton("CHANNELUP").onFailure { err ->
+                    tvClient.setFeedback(err.message ?: "Erro ao mudar canal")
+                }
+            }
+        }
+    }
+
+    fun onChannelDown() {
+        pulseIrLed()
+        viewModelScope.launch {
+            tvClient.setFeedback("Canal −")
+            tvClient.channelDown().onFailure {
+                tvClient.sendButton("CHANNELDOWN").onFailure { err ->
+                    tvClient.setFeedback(err.message ?: "Erro ao mudar canal")
+                }
+            }
+        }
+    }
+
     fun onMuteToggle() {
         pulseIrLed()
         viewModelScope.launch {
@@ -451,6 +475,18 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 tvClient.fetchAudioStatus()
                 tvClient.setFeedback("Volume diminuído")
+                _isBusy.value = false
+                return@launch
+            }
+
+            // 4.1 Mudar canal
+            if (lower.contains("proximo canal") || lower.contains("próximo canal") || lower.contains("canal seguinte") || lower.contains("aumentar canal") || lower.contains("subir canal")) {
+                onChannelUp()
+                _isBusy.value = false
+                return@launch
+            }
+            if (lower.contains("canal anterior") || lower.contains("voltar canal") || lower.contains("diminuir canal") || lower.contains("descer canal")) {
+                onChannelDown()
                 _isBusy.value = false
                 return@launch
             }
