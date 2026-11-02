@@ -43,6 +43,9 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
     private val _hapticEnabled = MutableStateFlow(preferences.getConfig().hapticEnabled)
     val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
 
+    private val _hardwareVolumeKeysEnabled = MutableStateFlow(preferences.getConfig().hardwareVolumeKeysEnabled)
+    val hardwareVolumeKeysEnabled: StateFlow<Boolean> = _hardwareVolumeKeysEnabled.asStateFlow()
+
     private val _irLedBlinking = MutableStateFlow(false)
     val irLedBlinking: StateFlow<Boolean> = _irLedBlinking.asStateFlow()
 
@@ -609,9 +612,16 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun onSaveSettings(ip: String, mac: String, broadcast: String, hapticEnabled: Boolean) {
-        preferences.saveConfig(ip, mac, broadcast, hapticEnabled)
+    fun onSaveSettings(
+        ip: String,
+        mac: String,
+        broadcast: String,
+        hapticEnabled: Boolean,
+        hardwareVolumeKeysEnabled: Boolean = true
+    ) {
+        preferences.saveConfig(ip, mac, broadcast, hapticEnabled, hardwareVolumeKeysEnabled)
         _hapticEnabled.value = hapticEnabled
+        _hardwareVolumeKeysEnabled.value = hardwareVolumeKeysEnabled
         tvClient.refreshConfigFromPrefs()
         tvClient.disconnect()
         hasSyncedAppsThisSession = false

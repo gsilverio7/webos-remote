@@ -31,7 +31,8 @@ data class TvConfig(
     val macAddress: String,
     val broadcastAddress: String,
     val clientKey: String,
-    val hapticEnabled: Boolean
+    val hapticEnabled: Boolean,
+    val hardwareVolumeKeysEnabled: Boolean = true
 )
 
 class TvPreferences(context: Context) {
@@ -49,6 +50,7 @@ class TvPreferences(context: Context) {
         private const val KEY_BROADCAST = "tv_broadcast_address"
         private const val KEY_CLIENT_KEY = "tv_client_key"
         private const val KEY_HAPTIC_ENABLED = "tv_haptic_enabled"
+        private const val KEY_HW_VOLUME_ENABLED = "tv_hw_volume_enabled"
         private const val KEY_SHORTCUTS_JSON = "tv_shortcuts_v1"
         private const val KEY_INSTALLED_APPS_JSON = "tv_installed_apps_v1"
 
@@ -71,7 +73,8 @@ class TvPreferences(context: Context) {
             macAddress = prefs.getString(KEY_MAC, DEFAULT_MAC)?.trim().orEmpty().ifEmpty { DEFAULT_MAC },
             broadcastAddress = prefs.getString(KEY_BROADCAST, DEFAULT_BROADCAST)?.trim().orEmpty().ifEmpty { DEFAULT_BROADCAST },
             clientKey = prefs.getString(KEY_CLIENT_KEY, DEFAULT_CLIENT_KEY)?.trim().orEmpty(),
-            hapticEnabled = prefs.getBoolean(KEY_HAPTIC_ENABLED, true)
+            hapticEnabled = prefs.getBoolean(KEY_HAPTIC_ENABLED, true),
+            hardwareVolumeKeysEnabled = prefs.getBoolean(KEY_HW_VOLUME_ENABLED, true)
         )
     }
 
@@ -79,13 +82,15 @@ class TvPreferences(context: Context) {
         ipAddress: String,
         macAddress: String,
         broadcastAddress: String,
-        hapticEnabled: Boolean
+        hapticEnabled: Boolean,
+        hardwareVolumeKeysEnabled: Boolean = true
     ) {
         prefs.edit()
             .putString(KEY_IP, ipAddress.trim())
             .putString(KEY_MAC, macAddress.trim().uppercase())
             .putString(KEY_BROADCAST, broadcastAddress.trim().ifEmpty { DEFAULT_BROADCAST })
             .putBoolean(KEY_HAPTIC_ENABLED, hapticEnabled)
+            .putBoolean(KEY_HW_VOLUME_ENABLED, hardwareVolumeKeysEnabled)
             .apply()
     }
 

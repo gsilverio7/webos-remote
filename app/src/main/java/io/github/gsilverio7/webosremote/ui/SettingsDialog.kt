@@ -38,15 +38,17 @@ fun SettingsDialog(
     initialMac: String,
     initialBroadcast: String,
     initialHapticEnabled: Boolean,
+    initialHardwareVolumeEnabled: Boolean,
     onDismiss: () -> Unit,
     onDiscover: ((String) -> Unit) -> Unit,
     onOpenShortcutsEditor: () -> Unit,
-    onSave: (ip: String, mac: String, broadcast: String, hapticEnabled: Boolean) -> Unit
+    onSave: (ip: String, mac: String, broadcast: String, hapticEnabled: Boolean, hardwareVolumeEnabled: Boolean) -> Unit
 ) {
     var ip by remember { mutableStateOf(initialIp) }
     var mac by remember { mutableStateOf(initialMac) }
     var broadcast by remember { mutableStateOf(initialBroadcast) }
     var hapticEnabled by remember { mutableStateOf(initialHapticEnabled) }
+    var hardwareVolumeEnabled by remember { mutableStateOf(initialHardwareVolumeEnabled) }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = Color.White,
@@ -149,6 +151,43 @@ fun SettingsDialog(
                 )
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Opção de Botões de Volume Físicos do Celular
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF0C0D10), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color(0xFF23252C), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Botões de Volume Físicos",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Botões de volume do celular controlam a TV",
+                        color = Color(0xFFA1A1AA),
+                        fontSize = 10.sp
+                    )
+                }
+                Switch(
+                    checked = hardwareVolumeEnabled,
+                    onCheckedChange = { hardwareVolumeEnabled = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFFDC2626),
+                        uncheckedThumbColor = Color(0xFFA1A1AA),
+                        uncheckedTrackColor = Color(0xFF27272A)
+                    )
+                )
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedButton(
@@ -185,7 +224,7 @@ fun SettingsDialog(
                 }
                 Button(
                     onClick = {
-                        onSave(ip, mac, broadcast, hapticEnabled)
+                        onSave(ip, mac, broadcast, hapticEnabled, hardwareVolumeEnabled)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))

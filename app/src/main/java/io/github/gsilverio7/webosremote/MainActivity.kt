@@ -1,15 +1,16 @@
 package io.github.gsilverio7.webosremote
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.gsilverio7.webosremote.ui.RemoteScreen
 import io.github.gsilverio7.webosremote.ui.RemoteViewModel
 
@@ -23,6 +24,8 @@ private val RemoteDarkColors = darkColorScheme(
 )
 
 class MainActivity : ComponentActivity() {
+    private val remoteViewModel: RemoteViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pitchBlack = Color(0xFF050507).toArgb()
@@ -32,9 +35,33 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             MaterialTheme(colorScheme = RemoteDarkColors) {
-                val remoteViewModel: RemoteViewModel = viewModel()
                 RemoteScreen(viewModel = remoteViewModel)
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (remoteViewModel.hardwareVolumeKeysEnabled.value) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP -> {
+                    remoteViewModel.onVolumeUp()
+                    return true
+                }
+                KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                    remoteViewModel.onVolumeDown()
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (remoteViewModel.hardwareVolumeKeysEnabled.value) {
+            if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                return true
+            }
+        }
+        return super.onKeyUp(keyCode, event)
     }
 }
