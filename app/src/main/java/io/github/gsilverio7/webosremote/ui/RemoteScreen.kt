@@ -256,9 +256,6 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                     }
                 }
 
-                // Espaço uniforme acima do D-Pad
-                Spacer(modifier = Modifier.height(16.dp))
-
                 // ==================== D-PAD CIRCULAR FÍSICO + OK ====================
                 PhysicalCircularDPad(
                     onUp = { viewModel.onNavigationButton("UP", "▲ Cima") },
@@ -268,9 +265,6 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                     onOk = { viewModel.onNavigationButton("ENTER", "● OK") },
                     wheelSize = 186.dp
                 )
-
-                // Espaço uniforme abaixo do D-Pad (idêntico ao espaço acima: 16.dp)
-                Spacer(modifier = Modifier.height(16.dp))
 
                 // ==================== GRADE 3x3 DE COMANDOS (MESMA LARGURA) ====================
                 // Linha 1: VOLTAR, VOZ/IA, HOME
@@ -574,9 +568,7 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
+                
                 // ==================== GRADE 3x3 DE TECLAS FÍSICAS DE APPS / CANAIS CONFIGURÁVEIS ====================
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -624,22 +616,6 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                             }
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Rodapé do controle (posicionado mais abaixo)
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(bottom = 6.dp)
-                ) {
-                    Text(
-                        text = "LG webOS SMART REMOTE",
-                        color = Color(0xFF52525B),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.4.sp
-                    )
                 }
             }
         }
