@@ -324,13 +324,13 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Mic,
-                                    contentDescription = "Controle por Voz / IA",
+                                    contentDescription = "Controle por Voz",
                                     tint = Color(0xFFE4E4E7),
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "VOZ / IA",
+                                    text = "VOZ",
                                     color = Color(0xFFE4E4E7),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
