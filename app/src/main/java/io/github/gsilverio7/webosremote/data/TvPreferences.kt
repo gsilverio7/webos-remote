@@ -5,6 +5,29 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
+enum class TvBrand(
+    val id: String,
+    val displayName: String,
+    val shortLabel: String
+) {
+    LG(
+        id = "lg",
+        displayName = "TV LG webOS",
+        shortLabel = "LG"
+    ),
+    SAMSUNG(
+        id = "samsung",
+        displayName = "TV Samsung Tizen",
+        shortLabel = "SAMSUNG"
+    );
+
+    companion object {
+        fun fromId(id: String?): TvBrand {
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: LG
+        }
+    }
+}
+
 enum class ShortcutActionType {
     APP,
     YOUTUBE_LIVE
@@ -45,6 +68,12 @@ class TvPreferences(context: Context) {
         const val DEFAULT_BROADCAST = "192.168.0.255"
         const val DEFAULT_CLIENT_KEY = "46ca7bede69c3d9fc08f27fe3d93b0a9"
 
+        const val DEFAULT_SAMSUNG_IP = "192.168.0.5"
+        const val DEFAULT_SAMSUNG_MAC = ""
+        const val DEFAULT_SAMSUNG_CLIENT_KEY = ""
+
+        private const val KEY_ACTIVE_BRAND = "active_tv_brand"
+
         private const val KEY_IP = "tv_ip_address"
         private const val KEY_MAC = "tv_mac_address"
         private const val KEY_BROADCAST = "tv_broadcast_address"
@@ -54,31 +83,64 @@ class TvPreferences(context: Context) {
         private const val KEY_SHORTCUTS_JSON = "tv_shortcuts_v1"
         private const val KEY_INSTALLED_APPS_JSON = "tv_installed_apps_v1"
 
-        fun defaultShortcuts(): List<ShortcutSlotConfig> = listOf(
-            ShortcutSlotConfig(0, "prime", "Prime", ShortcutActionType.APP, "amazon"),
-            ShortcutSlotConfig(1, "max", "Max", ShortcutActionType.APP, "com.wbd.stream"),
-            ShortcutSlotConfig(2, "disney", "Disney+", ShortcutActionType.APP, "com.disney.disneyplus-prod"),
-            ShortcutSlotConfig(3, "globoplay", "Globoplay", ShortcutActionType.APP, "globoplaywebos"),
-            ShortcutSlotConfig(4, "sbt", "SBT", ShortcutActionType.YOUTUBE_LIVE, "@sbt"),
-            ShortcutSlotConfig(5, "jovempan", "Jovem Pan", ShortcutActionType.APP, "com.webos.app.lgchannels"),
-            ShortcutSlotConfig(6, "ipp", "IPP TV", ShortcutActionType.YOUTUBE_LIVE, "@ippinheiros"),
-            ShortcutSlotConfig(7, "youtube", "YouTube", ShortcutActionType.APP, "youtube.leanback.v4"),
-            ShortcutSlotConfig(8, "moonlight", "Moonlight", ShortcutActionType.APP, "com.limelight.webos")
-        )
+        fun defaultShortcuts(brand: TvBrand = TvBrand.LG): List<ShortcutSlotConfig> = when (brand) {
+            TvBrand.LG -> listOf(
+                ShortcutSlotConfig(0, "prime", "Prime", ShortcutActionType.APP, "amazon"),
+                ShortcutSlotConfig(1, "max", "Max", ShortcutActionType.APP, "com.wbd.stream"),
+                ShortcutSlotConfig(2, "disney", "Disney+", ShortcutActionType.APP, "com.disney.disneyplus-prod"),
+                ShortcutSlotConfig(3, "globoplay", "Globoplay", ShortcutActionType.APP, "globoplaywebos"),
+                ShortcutSlotConfig(4, "sbt", "SBT", ShortcutActionType.YOUTUBE_LIVE, "@sbt"),
+                ShortcutSlotConfig(5, "jovempan", "Jovem Pan", ShortcutActionType.APP, "com.webos.app.lgchannels"),
+                ShortcutSlotConfig(6, "ipp", "IPP TV", ShortcutActionType.YOUTUBE_LIVE, "@ippinheiros"),
+                ShortcutSlotConfig(7, "youtube", "YouTube", ShortcutActionType.APP, "youtube.leanback.v4"),
+                ShortcutSlotConfig(8, "moonlight", "Moonlight", ShortcutActionType.APP, "com.limelight.webos")
+            )
+            TvBrand.SAMSUNG -> listOf(
+                ShortcutSlotConfig(0, "prime", "Prime", ShortcutActionType.APP, "3201910019365"),
+                ShortcutSlotConfig(1, "max", "Max", ShortcutActionType.APP, "3202301029760"),
+                ShortcutSlotConfig(2, "disney", "Disney+", ShortcutActionType.APP, "3201901017640"),
+                ShortcutSlotConfig(3, "globoplay", "Globoplay", ShortcutActionType.APP, "3201908019041"),
+                ShortcutSlotConfig(4, "sbt", "SBT", ShortcutActionType.YOUTUBE_LIVE, "@sbt"),
+                ShortcutSlotConfig(5, "jovempan", "Jovem Pan", ShortcutActionType.APP, "org.tizen.tvplus"),
+                ShortcutSlotConfig(6, "ipp", "IPP TV", ShortcutActionType.YOUTUBE_LIVE, "@ippinheiros"),
+                ShortcutSlotConfig(7, "youtube", "YouTube", ShortcutActionType.APP, "111299001912"),
+                ShortcutSlotConfig(8, "moonlight", "Moonlight", ShortcutActionType.APP, "com.limelight.tizen")
+            )
+        }
     }
 
-    fun getConfig(): TvConfig {
+    private fun keyFor(brand: TvBrand, baseKey: String): String {
+        return when (brand) {
+            TvBrand.LG -> baseKey
+            TvBrand.SAMSUNG -> "samsung_$baseKey"
+        }
+    }
+
+    fun getActiveBrand(): TvBrand {
+        return TvBrand.fromId(prefs.getString(KEY_ACTIVE_BRAND, TvBrand.LG.id))
+    }
+
+    fun setActiveBrand(brand: TvBrand) {
+        prefs.edit().putString(KEY_ACTIVE_BRAND, brand.id).apply()
+    }
+
+    fun getConfig(brand: TvBrand = TvBrand.LG): TvConfig {
+        val defIp = if (brand == TvBrand.LG) DEFAULT_IP else DEFAULT_SAMSUNG_IP
+        val defMac = if (brand == TvBrand.LG) DEFAULT_MAC else DEFAULT_SAMSUNG_MAC
+        val defKey = if (brand == TvBrand.LG) DEFAULT_CLIENT_KEY else DEFAULT_SAMSUNG_CLIENT_KEY
+
         return TvConfig(
-            ipAddress = prefs.getString(KEY_IP, DEFAULT_IP)?.trim().orEmpty().ifEmpty { DEFAULT_IP },
-            macAddress = prefs.getString(KEY_MAC, DEFAULT_MAC)?.trim().orEmpty().ifEmpty { DEFAULT_MAC },
-            broadcastAddress = prefs.getString(KEY_BROADCAST, DEFAULT_BROADCAST)?.trim().orEmpty().ifEmpty { DEFAULT_BROADCAST },
-            clientKey = prefs.getString(KEY_CLIENT_KEY, DEFAULT_CLIENT_KEY)?.trim().orEmpty(),
-            hapticEnabled = prefs.getBoolean(KEY_HAPTIC_ENABLED, true),
-            hardwareVolumeKeysEnabled = prefs.getBoolean(KEY_HW_VOLUME_ENABLED, true)
+            ipAddress = prefs.getString(keyFor(brand, KEY_IP), defIp)?.trim().orEmpty().ifEmpty { defIp },
+            macAddress = prefs.getString(keyFor(brand, KEY_MAC), defMac)?.trim().orEmpty(),
+            broadcastAddress = prefs.getString(keyFor(brand, KEY_BROADCAST), DEFAULT_BROADCAST)?.trim().orEmpty().ifEmpty { DEFAULT_BROADCAST },
+            clientKey = prefs.getString(keyFor(brand, KEY_CLIENT_KEY), defKey)?.trim().orEmpty(),
+            hapticEnabled = prefs.getBoolean(keyFor(brand, KEY_HAPTIC_ENABLED), true),
+            hardwareVolumeKeysEnabled = prefs.getBoolean(keyFor(brand, KEY_HW_VOLUME_ENABLED), true)
         )
     }
 
     fun saveConfig(
+        brand: TvBrand = TvBrand.LG,
         ipAddress: String,
         macAddress: String,
         broadcastAddress: String,
@@ -86,33 +148,33 @@ class TvPreferences(context: Context) {
         hardwareVolumeKeysEnabled: Boolean = true
     ) {
         prefs.edit()
-            .putString(KEY_IP, ipAddress.trim())
-            .putString(KEY_MAC, macAddress.trim().uppercase())
-            .putString(KEY_BROADCAST, broadcastAddress.trim().ifEmpty { DEFAULT_BROADCAST })
-            .putBoolean(KEY_HAPTIC_ENABLED, hapticEnabled)
-            .putBoolean(KEY_HW_VOLUME_ENABLED, hardwareVolumeKeysEnabled)
+            .putString(keyFor(brand, KEY_IP), ipAddress.trim())
+            .putString(keyFor(brand, KEY_MAC), macAddress.trim().uppercase())
+            .putString(keyFor(brand, KEY_BROADCAST), broadcastAddress.trim().ifEmpty { DEFAULT_BROADCAST })
+            .putBoolean(keyFor(brand, KEY_HAPTIC_ENABLED), hapticEnabled)
+            .putBoolean(keyFor(brand, KEY_HW_VOLUME_ENABLED), hardwareVolumeKeysEnabled)
             .apply()
     }
 
-    fun setHapticEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_HAPTIC_ENABLED, enabled).apply()
+    fun setHapticEnabled(brand: TvBrand = TvBrand.LG, enabled: Boolean) {
+        prefs.edit().putBoolean(keyFor(brand, KEY_HAPTIC_ENABLED), enabled).apply()
     }
 
-    fun saveIpAddress(ipAddress: String) {
+    fun saveIpAddress(brand: TvBrand = TvBrand.LG, ipAddress: String) {
         if (ipAddress.isNotBlank()) {
-            prefs.edit().putString(KEY_IP, ipAddress.trim()).apply()
+            prefs.edit().putString(keyFor(brand, KEY_IP), ipAddress.trim()).apply()
         }
     }
 
-    fun saveClientKey(clientKey: String) {
+    fun saveClientKey(brand: TvBrand = TvBrand.LG, clientKey: String) {
         if (clientKey.isNotBlank()) {
-            prefs.edit().putString(KEY_CLIENT_KEY, clientKey.trim()).apply()
+            prefs.edit().putString(keyFor(brand, KEY_CLIENT_KEY), clientKey.trim()).apply()
         }
     }
 
-    fun getShortcuts(): List<ShortcutSlotConfig> {
-        val raw = prefs.getString(KEY_SHORTCUTS_JSON, null)
-        val defaults = defaultShortcuts()
+    fun getShortcuts(brand: TvBrand = TvBrand.LG): List<ShortcutSlotConfig> {
+        val raw = prefs.getString(keyFor(brand, KEY_SHORTCUTS_JSON), null)
+        val defaults = defaultShortcuts(brand)
         if (raw.isNullOrBlank()) return defaults
 
         return runCatching {
@@ -138,7 +200,7 @@ class TvPreferences(context: Context) {
         }.getOrDefault(defaults)
     }
 
-    fun saveShortcuts(shortcuts: List<ShortcutSlotConfig>) {
+    fun saveShortcuts(brand: TvBrand = TvBrand.LG, shortcuts: List<ShortcutSlotConfig>) {
         val arr = JSONArray()
         shortcuts.sortedBy { it.slotIndex }.forEach { item ->
             arr.put(
@@ -154,16 +216,16 @@ class TvPreferences(context: Context) {
                 }
             )
         }
-        prefs.edit().putString(KEY_SHORTCUTS_JSON, arr.toString()).apply()
+        prefs.edit().putString(keyFor(brand, KEY_SHORTCUTS_JSON), arr.toString()).apply()
     }
 
-    fun resetShortcutsToDefault(): List<ShortcutSlotConfig> {
-        prefs.edit().remove(KEY_SHORTCUTS_JSON).apply()
-        return defaultShortcuts()
+    fun resetShortcutsToDefault(brand: TvBrand = TvBrand.LG): List<ShortcutSlotConfig> {
+        prefs.edit().remove(keyFor(brand, KEY_SHORTCUTS_JSON)).apply()
+        return defaultShortcuts(brand)
     }
 
-    fun getCachedInstalledApps(): List<TvInstalledApp> {
-        val raw = prefs.getString(KEY_INSTALLED_APPS_JSON, null) ?: return emptyList()
+    fun getCachedInstalledApps(brand: TvBrand = TvBrand.LG): List<TvInstalledApp> {
+        val raw = prefs.getString(keyFor(brand, KEY_INSTALLED_APPS_JSON), null) ?: return emptyList()
         return runCatching {
             val arr = JSONArray(raw)
             val list = mutableListOf<TvInstalledApp>()
@@ -186,7 +248,7 @@ class TvPreferences(context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    fun saveCachedInstalledApps(apps: List<TvInstalledApp>) {
+    fun saveCachedInstalledApps(brand: TvBrand = TvBrand.LG, apps: List<TvInstalledApp>) {
         val arr = JSONArray()
         apps.forEach { app ->
             arr.put(
@@ -200,6 +262,6 @@ class TvPreferences(context: Context) {
                 }
             )
         }
-        prefs.edit().putString(KEY_INSTALLED_APPS_JSON, arr.toString()).apply()
+        prefs.edit().putString(keyFor(brand, KEY_INSTALLED_APPS_JSON), arr.toString()).apply()
     }
 }

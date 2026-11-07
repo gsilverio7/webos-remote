@@ -31,9 +31,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import io.github.gsilverio7.webosremote.data.TvBrand
 
 @Composable
 fun SettingsDialog(
+    brand: TvBrand = TvBrand.LG,
     initialIp: String,
     initialMac: String,
     initialBroadcast: String,
@@ -69,14 +71,18 @@ fun SettingsDialog(
                 .padding(20.dp)
         ) {
             Text(
-                text = "Configurar TV LG webOS",
+                text = "Configurar ${brand.displayName}",
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Conexão Wi-Fi (SSAP WebSocket + Wake-on-LAN), vibração e atalhos",
+                text = if (brand == TvBrand.LG) {
+                    "Conexão Wi-Fi (SSAP WebSocket + Wake-on-LAN), vibração e atalhos"
+                } else {
+                    "Conexão Wi-Fi (Tizen WebSocket + Wake-on-LAN), vibração e atalhos"
+                },
                 color = Color(0xFFA1A1AA),
                 fontSize = 11.sp
             )

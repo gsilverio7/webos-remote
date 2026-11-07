@@ -7,16 +7,23 @@ import androidx.lifecycle.viewModelScope
 import io.github.gsilverio7.webosremote.R
 import io.github.gsilverio7.webosremote.data.ShortcutActionType
 import io.github.gsilverio7.webosremote.data.ShortcutSlotConfig
+import io.github.gsilverio7.webosremote.data.TvBrand
 import io.github.gsilverio7.webosremote.data.TvInstalledApp
 import io.github.gsilverio7.webosremote.data.TvPreferences
 import io.github.gsilverio7.webosremote.network.LgWebOsClient
+import io.github.gsilverio7.webosremote.network.SamsungTizenClient
+import io.github.gsilverio7.webosremote.network.TvClient
 import io.github.gsilverio7.webosremote.network.TvConnectionState
 import io.github.gsilverio7.webosremote.network.TvSsdpDiscovery
 import io.github.gsilverio7.webosremote.network.YouTubeLiveResolver
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -31,19 +38,48 @@ data class TvAppShortcut(
     val customIconPath: String? = null
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RemoteViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext = application.applicationContext
     private val preferences = TvPreferences(appContext)
-    private val tvClient = LgWebOsClient(preferences)
-    private val iconsDir = File(appContext.filesDir, "tv_icons").apply { mkdirs() }
 
-    val tvState: StateFlow<TvConnectionState> = tvClient.state
+    private val lgClient = LgWebOsClient(preferences)
+    private val samsungClient = SamsungTizenClient(preferences)
 
-    private val _hapticEnabled = MutableStateFlow(preferences.getConfig().hapticEnabled)
+    private val lgIconsDir = File(appContext.filesDir, "tv_icons").apply { mkdirs() }
+    private val samsungIconsDir = File(appContext.filesDir, "tv_icons_samsung").apply { mkdirs() }
+
+    private val _activeBrand = MutableStateFlow(preferences.getActiveBrand())
+    val activeBrand: StateFlow<TvBrand> = _activeBrand.asStateFlow()
+
+    private val activeClient: TvClient
+        get() = clientFor(_activeBrand.value)
+
+    private fun clientFor(brand: TvBrand): TvClient = when (brand) {
+        TvBrand.LG -> lgClient
+        TvBrand.SAMSUNG -> samsungClient
+    }
+
+    private fun iconsDirFor(brand: TvBrand): File = when (brand) {
+        TvBrand.LG -> lgIconsDir
+        TvBrand.SAMSUNG -> samsungIconsDir
+    }
+
+    fun tvStateFor(brand: TvBrand): StateFlow<TvConnectionState> = clientFor(brand).state
+
+    val tvState: StateFlow<TvConnectionState> = _activeBrand
+        .flatMapLatest { brand -> clientFor(brand).state }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = clientFor(_activeBrand.value).state.value
+        )
+
+    private val _hapticEnabled = MutableStateFlow(preferences.getConfig(_activeBrand.value).hapticEnabled)
     val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
 
-    private val _hardwareVolumeKeysEnabled = MutableStateFlow(preferences.getConfig().hardwareVolumeKeysEnabled)
+    private val _hardwareVolumeKeysEnabled = MutableStateFlow(preferences.getConfig(_activeBrand.value).hardwareVolumeKeysEnabled)
     val hardwareVolumeKeysEnabled: StateFlow<Boolean> = _hardwareVolumeKeysEnabled.asStateFlow()
 
     private val _irLedBlinking = MutableStateFlow(false)
@@ -52,59 +88,87 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
     private val _isBusy = MutableStateFlow(false)
     val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
 
-    private val _installedApps = MutableStateFlow(buildInitialAppsList())
+    private val _installedApps = MutableStateFlow(buildInitialAppsList(_activeBrand.value))
     val installedApps: StateFlow<List<TvInstalledApp>> = _installedApps.asStateFlow()
 
     private val _isLoadingApps = MutableStateFlow(false)
     val isLoadingApps: StateFlow<Boolean> = _isLoadingApps.asStateFlow()
 
-    private val _shortcuts = MutableStateFlow(loadUiShortcuts())
-    val shortcuts: StateFlow<List<TvAppShortcut>> = _shortcuts.asStateFlow()
+    private val _lgShortcuts = MutableStateFlow(loadUiShortcuts(TvBrand.LG))
+    private val _samsungShortcuts = MutableStateFlow(loadUiShortcuts(TvBrand.SAMSUNG))
 
-    private var hasSyncedAppsThisSession = false
+    fun shortcutsFor(brand: TvBrand): StateFlow<List<TvAppShortcut>> = when (brand) {
+        TvBrand.LG -> _lgShortcuts.asStateFlow()
+        TvBrand.SAMSUNG -> _samsungShortcuts.asStateFlow()
+    }
+
+    val shortcuts: StateFlow<List<TvAppShortcut>> = _activeBrand
+        .flatMapLatest { brand -> shortcutsFor(brand) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = loadUiShortcuts(_activeBrand.value)
+        )
+
+    private val syncedBrandsThisSession = mutableSetOf<TvBrand>()
 
     companion object {
         @DrawableRes
         fun resolveBundledIcon(targetOrId: String, label: String = ""): Int {
             val key = "${targetOrId.lowercase()} ${label.lowercase()}"
             return when {
-                key.contains("amazon") || key.contains("prime") -> R.drawable.logo_primevideo
-                key.contains("wbd") || key.contains("hbomax") || key.contains("max") -> R.drawable.logo_hbomax
-                key.contains("disney") -> R.drawable.logo_disneyplus
-                key.contains("globoplay") -> R.drawable.logo_globoplay
+                key.contains("amazon") || key.contains("prime") || key.contains("3201910019365") -> R.drawable.logo_primevideo
+                key.contains("wbd") || key.contains("hbomax") || key.contains("max") || key.contains("3202301029760") -> R.drawable.logo_hbomax
+                key.contains("disney") || key.contains("3201901017640") -> R.drawable.logo_disneyplus
+                key.contains("globoplay") || key.contains("3201908019041") -> R.drawable.logo_globoplay
                 key.contains("sbt") -> R.drawable.logo_sbt
-                key.contains("jovempan") || key.contains("lgchannels") -> R.drawable.logo_jovempan
+                key.contains("jovempan") || key.contains("lgchannels") || key.contains("tvplus") -> R.drawable.logo_jovempan
                 key.contains("ippinheiros") || key.contains("ipp") -> R.drawable.logo_ipptv
                 key.contains("moonlight") || key.contains("limelight") -> R.drawable.logo_moonlight
-                key.contains("youtube") -> R.drawable.logo_youtube
+                key.contains("youtube") || key.contains("111299001912") -> R.drawable.logo_youtube
                 else -> 0
             }
         }
 
-        private fun defaultKnownTvApps(): List<TvInstalledApp> = listOf(
-            TvInstalledApp("youtube.leanback.v4", "YouTube"),
-            TvInstalledApp("netflix", "Netflix"),
-            TvInstalledApp("amazon", "Prime Video"),
-            TvInstalledApp("com.wbd.stream", "Max"),
-            TvInstalledApp("com.disney.disneyplus-prod", "Disney+"),
-            TvInstalledApp("globoplaywebos", "Globoplay"),
-            TvInstalledApp("com.limelight.webos", "Moonlight"),
-            TvInstalledApp("com.webos.app.lgchannels", "LG Channels / Jovem Pan"),
-            TvInstalledApp("spotify-beehive", "Spotify"),
-            TvInstalledApp("com.apple.appletv", "Apple TV"),
-            TvInstalledApp("com.webos.app.browser", "Navegador Web")
-        )
+        private fun defaultKnownTvApps(brand: TvBrand): List<TvInstalledApp> = when (brand) {
+            TvBrand.LG -> listOf(
+                TvInstalledApp("youtube.leanback.v4", "YouTube"),
+                TvInstalledApp("netflix", "Netflix"),
+                TvInstalledApp("amazon", "Prime Video"),
+                TvInstalledApp("com.wbd.stream", "Max"),
+                TvInstalledApp("com.disney.disneyplus-prod", "Disney+"),
+                TvInstalledApp("globoplaywebos", "Globoplay"),
+                TvInstalledApp("com.limelight.webos", "Moonlight"),
+                TvInstalledApp("com.webos.app.lgchannels", "LG Channels / Jovem Pan"),
+                TvInstalledApp("spotify-beehive", "Spotify"),
+                TvInstalledApp("com.apple.appletv", "Apple TV"),
+                TvInstalledApp("com.webos.app.browser", "Navegador Web")
+            )
+            TvBrand.SAMSUNG -> listOf(
+                TvInstalledApp("111299001912", "YouTube"),
+                TvInstalledApp("3201907018807", "Netflix"),
+                TvInstalledApp("3201910019365", "Prime Video"),
+                TvInstalledApp("3202301029760", "Max"),
+                TvInstalledApp("3201901017640", "Disney+"),
+                TvInstalledApp("3201908019041", "Globoplay"),
+                TvInstalledApp("com.limelight.tizen", "Moonlight"),
+                TvInstalledApp("org.tizen.tvplus", "Samsung TV Plus / Jovem Pan"),
+                TvInstalledApp("3201606009684", "Spotify"),
+                TvInstalledApp("3201807016597", "Apple TV"),
+                TvInstalledApp("org.tizen.browser", "Samsung Internet")
+            )
+        }
     }
 
-    private fun buildInitialAppsList(): List<TvInstalledApp> {
-        val cached = preferences.getCachedInstalledApps()
+    private fun buildInitialAppsList(brand: TvBrand): List<TvInstalledApp> {
+        val cached = preferences.getCachedInstalledApps(brand)
         if (cached.isNotEmpty()) return cached
-        return defaultKnownTvApps()
+        return defaultKnownTvApps(brand)
     }
 
-    private fun loadUiShortcuts(): List<TvAppShortcut> {
-        val cachedAppsById = preferences.getCachedInstalledApps().associateBy { it.appId }
-        return preferences.getShortcuts().map { cfg ->
+    private fun loadUiShortcuts(brand: TvBrand): List<TvAppShortcut> {
+        val cachedAppsById = preferences.getCachedInstalledApps(brand).associateBy { it.appId }
+        return preferences.getShortcuts(brand).map { cfg ->
             val iconPath = cfg.customIconPath
                 ?: cachedAppsById[cfg.target]?.localIconPath
             val fallbackRes = resolveBundledIcon(cfg.target, cfg.label).let { res ->
@@ -124,18 +188,45 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun refreshShortcutsState(brand: TvBrand) {
+        when (brand) {
+            TvBrand.LG -> _lgShortcuts.value = loadUiShortcuts(TvBrand.LG)
+            TvBrand.SAMSUNG -> _samsungShortcuts.value = loadUiShortcuts(TvBrand.SAMSUNG)
+        }
+    }
+
+    fun onSelectBrand(brand: TvBrand) {
+        if (_activeBrand.value == brand) return
+        _activeBrand.value = brand
+        preferences.setActiveBrand(brand)
+        val cfg = preferences.getConfig(brand)
+        _hapticEnabled.value = cfg.hapticEnabled
+        _hardwareVolumeKeysEnabled.value = cfg.hardwareVolumeKeysEnabled
+        _installedApps.value = buildInitialAppsList(brand)
+        refreshShortcutsState(brand)
+
+        viewModelScope.launch {
+            val client = clientFor(brand)
+            val state = client.state.value
+            if (!state.connected) {
+                client.ensureConnected(timeoutMs = 1800)
+            }
+        }
+    }
+
     init {
-        // Monitoramento periódico de conexão com a TV
+        // Monitoramento periódico de conexão com a TV ativa
         viewModelScope.launch {
             while (isActive) {
-                val state = tvState.value
+                val brand = _activeBrand.value
+                val client = clientFor(brand)
+                val state = client.state.value
                 if (!state.connected) {
-                    tvClient.ensureConnected(timeoutMs = 1800)
+                    client.ensureConnected(timeoutMs = 1800)
                 } else if (state.paired) {
-                    tvClient.fetchAudioStatus()
-                    if (!hasSyncedAppsThisSession) {
-                        hasSyncedAppsThisSession = true
-                        refreshInstalledAppsSilent()
+                    client.fetchAudioStatus()
+                    if (syncedBrandsThisSession.add(brand)) {
+                        refreshInstalledAppsSilent(brand)
                     }
                 }
                 delay(10_000L)
@@ -153,17 +244,18 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onPowerToggle() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
             _isBusy.value = true
-            val current = tvState.value
-            tvClient.setFeedback(
+            val current = client.state.value
+            client.setFeedback(
                 if (current.connected && current.paired) "Desligando TV..." else "Enviando Wake-on-LAN..."
             )
-            val result = tvClient.togglePower()
+            val result = client.togglePower()
             result.onSuccess { msg ->
-                tvClient.setFeedback(msg)
+                client.setFeedback(msg)
             }.onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Falha ao acionar energia da TV")
+                client.setFeedback(err.message ?: "Falha ao acionar energia da TV")
             }
             _isBusy.value = false
         }
@@ -171,35 +263,38 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onVolumeUp() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback("Volume +")
-            tvClient.volumeUp().onSuccess {
-                tvClient.fetchAudioStatus()
+            client.setFeedback("Volume +")
+            client.volumeUp().onSuccess {
+                client.fetchAudioStatus()
             }.onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Erro ao aumentar volume")
+                client.setFeedback(err.message ?: "Erro ao aumentar volume")
             }
         }
     }
 
     fun onVolumeDown() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback("Volume −")
-            tvClient.volumeDown().onSuccess {
-                tvClient.fetchAudioStatus()
+            client.setFeedback("Volume −")
+            client.volumeDown().onSuccess {
+                client.fetchAudioStatus()
             }.onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Erro ao diminuir volume")
+                client.setFeedback(err.message ?: "Erro ao diminuir volume")
             }
         }
     }
 
     fun onChannelUp() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback("Canal +")
-            tvClient.channelUp().onFailure {
-                tvClient.sendButton("CHANNELUP").onFailure { err ->
-                    tvClient.setFeedback(err.message ?: "Erro ao mudar canal")
+            client.setFeedback("Canal +")
+            client.channelUp().onFailure {
+                client.sendButton("CHANNELUP").onFailure { err ->
+                    client.setFeedback(err.message ?: "Erro ao mudar canal")
                 }
             }
         }
@@ -207,11 +302,12 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onChannelDown() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback("Canal −")
-            tvClient.channelDown().onFailure {
-                tvClient.sendButton("CHANNELDOWN").onFailure { err ->
-                    tvClient.setFeedback(err.message ?: "Erro ao mudar canal")
+            client.setFeedback("Canal −")
+            client.channelDown().onFailure {
+                client.sendButton("CHANNELDOWN").onFailure { err ->
+                    client.setFeedback(err.message ?: "Erro ao mudar canal")
                 }
             }
         }
@@ -219,73 +315,85 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onMuteToggle() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            val res = tvClient.toggleMute()
+            val res = client.toggleMute()
             res.onSuccess { muted ->
-                tvClient.setFeedback(if (muted) "Mudo ativado" else "Mudo desativado")
+                client.setFeedback(if (muted) "Mudo ativado" else "Mudo desativado")
             }.onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Erro ao alternar mudo")
+                client.setFeedback(err.message ?: "Erro ao alternar mudo")
             }
         }
     }
 
     fun onNavigationButton(button: String, label: String) {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback(label)
-            tvClient.sendButton(button).onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Falha ao enviar $label")
+            client.setFeedback(label)
+            client.sendButton(button).onFailure { err ->
+                client.setFeedback(err.message ?: "Falha ao enviar $label")
             }
         }
     }
 
     fun onLaunchShortcut(shortcut: TvAppShortcut) {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
             _isBusy.value = true
-            tvClient.setFeedback("Abrindo ${shortcut.label}...")
+            client.setFeedback("Abrindo ${shortcut.label}...")
             val result = when (shortcut.actionType) {
-                ShortcutActionType.APP -> tvClient.launchApp(shortcut.target)
-                ShortcutActionType.YOUTUBE_LIVE -> tvClient.launchYouTubeUrl(shortcut.target)
+                ShortcutActionType.APP -> client.launchApp(shortcut.target)
+                ShortcutActionType.YOUTUBE_LIVE -> client.launchYouTubeUrl(shortcut.target)
             }
             result.onSuccess {
-                tvClient.setFeedback("${shortcut.label} aberto na TV")
+                client.setFeedback("${shortcut.label} aberto na TV")
             }.onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Falha ao abrir ${shortcut.label}")
+                client.setFeedback(err.message ?: "Falha ao abrir ${shortcut.label}")
             }
             _isBusy.value = false
         }
     }
 
     /**
-     * Sincroniza os aplicativos instalados e seus ícones diretamente da TV LG.
+     * Sincroniza os aplicativos instalados e seus ícones diretamente da TV ativa (LG ou Samsung).
      */
     fun onRefreshInstalledApps() {
+        val brand = _activeBrand.value
+        val client = clientFor(brand)
+        val iconsDir = iconsDirFor(brand)
         viewModelScope.launch {
             _isLoadingApps.value = true
-            tvClient.setFeedback("Carregando apps instalados na TV...")
-            val res = tvClient.fetchInstalledApps(iconsDir)
+            client.setFeedback("Carregando apps instalados na TV...")
+            val res = client.fetchInstalledApps(iconsDir)
             res.onSuccess { apps ->
-                _installedApps.value = apps
-                _shortcuts.value = loadUiShortcuts()
-                tvClient.setFeedback("${apps.size} apps carregados da TV!")
+                if (_activeBrand.value == brand) {
+                    _installedApps.value = apps
+                }
+                refreshShortcutsState(brand)
+                client.setFeedback("${apps.size} apps carregados da TV!")
             }.onFailure { err ->
-                tvClient.setFeedback(err.message ?: "Ligue a TV para carregar os apps instalados")
+                client.setFeedback(err.message ?: "Ligue a TV para carregar os apps instalados")
             }
             _isLoadingApps.value = false
         }
     }
 
-    private suspend fun refreshInstalledAppsSilent() {
-        val res = tvClient.fetchInstalledApps(iconsDir)
+    private suspend fun refreshInstalledAppsSilent(brand: TvBrand) {
+        val client = clientFor(brand)
+        val iconsDir = iconsDirFor(brand)
+        val res = client.fetchInstalledApps(iconsDir)
         res.onSuccess { apps ->
-            _installedApps.value = apps
-            _shortcuts.value = loadUiShortcuts()
+            if (_activeBrand.value == brand) {
+                _installedApps.value = apps
+            }
+            refreshShortcutsState(brand)
         }
     }
 
     /**
-     * Salva a configuração de um dos 9 botões de atalho.
+     * Salva a configuração de um dos 9 botões de atalho da TV ativa (de forma independente por controle).
      * Se for uma Live do YouTube, busca automaticamente o ícone/avatar do canal!
      */
     fun onSaveShortcut(
@@ -295,7 +403,10 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
         target: String,
         customIconPath: String?
     ) {
-        val currentList = preferences.getShortcuts().toMutableList()
+        val brand = _activeBrand.value
+        val client = clientFor(brand)
+        val iconsDir = iconsDirFor(brand)
+        val currentList = preferences.getShortcuts(brand).toMutableList()
         val cleanTarget = if (actionType == ShortcutActionType.YOUTUBE_LIVE &&
             !target.startsWith("http") &&
             !target.startsWith("@")
@@ -321,9 +432,9 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
             currentList.add(updatedSlot)
         }
 
-        preferences.saveShortcuts(currentList)
-        _shortcuts.value = loadUiShortcuts()
-        tvClient.setFeedback("Atalho \"${label.trim()}\" salvo!")
+        preferences.saveShortcuts(brand, currentList)
+        refreshShortcutsState(brand)
+        client.setFeedback("Atalho \"${label.trim()}\" salvo!")
 
         // Se for canal de Live do YouTube e ainda não tiver ícone local, baixa o avatar do canal em background
         if (actionType == ShortcutActionType.YOUTUBE_LIVE) {
@@ -332,15 +443,15 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
                 if (!avatarUrl.isNullOrBlank()) {
                     val safeChannel = cleanTarget.replace(Regex("[^a-zA-Z0-9._-]"), "_")
                     val destFile = File(iconsDir, "yt_${safeChannel}.jpg")
-                    val downloadedPath = tvClient.downloadFile(avatarUrl, destFile)
+                    val downloadedPath = client.downloadFile(avatarUrl, destFile)
                     if (!downloadedPath.isNullOrBlank()) {
-                        val refreshed = preferences.getShortcuts().map { slot ->
+                        val refreshed = preferences.getShortcuts(brand).map { slot ->
                             if (slot.slotIndex == slotIndex) {
                                 slot.copy(customIconPath = downloadedPath)
                             } else slot
                         }
-                        preferences.saveShortcuts(refreshed)
-                        _shortcuts.value = loadUiShortcuts()
+                        preferences.saveShortcuts(brand, refreshed)
+                        refreshShortcutsState(brand)
                     }
                 }
             }
@@ -348,43 +459,48 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onResetShortcutsToDefault() {
-        preferences.resetShortcutsToDefault()
-        _shortcuts.value = loadUiShortcuts()
-        tvClient.setFeedback("Atalhos restaurados para o padrão")
+        val brand = _activeBrand.value
+        val client = clientFor(brand)
+        preferences.resetShortcutsToDefault(brand)
+        refreshShortcutsState(brand)
+        client.setFeedback("Atalhos restaurados para o padrão")
     }
 
     /**
-     * Teclado do Celular -> Envia texto diretamente para o campo de texto da TV.
+     * Teclado do Celular -> Envia texto diretamente para o campo de texto da TV ativa.
      */
     fun onSendTextToTv(text: String, replace: Boolean = false, pressEnter: Boolean = true) {
         if (text.isEmpty()) return
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback("Enviando texto para a TV...")
-            tvClient.sendTextInput(text, replace = replace, pressEnter = pressEnter)
+            client.setFeedback("Enviando texto para a TV...")
+            client.sendTextInput(text, replace = replace, pressEnter = pressEnter)
                 .onSuccess {
-                    tvClient.setFeedback("Texto enviado: \"$text\"")
+                    client.setFeedback("Texto enviado: \"$text\"")
                 }
                 .onFailure { err ->
-                    tvClient.setFeedback(err.message ?: "Erro ao enviar texto")
+                    client.setFeedback(err.message ?: "Erro ao enviar texto")
                 }
         }
     }
 
     fun onDeleteTvChar() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.deleteTextCharacters(1)
-                .onSuccess { tvClient.setFeedback("⌫ Apagar na TV") }
-                .onFailure { tvClient.sendButton("BACK") }
+            client.deleteTextCharacters(1)
+                .onSuccess { client.setFeedback("⌫ Apagar na TV") }
+                .onFailure { client.sendButton("BACK") }
         }
     }
 
     fun onSendTvEnter() {
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
-            tvClient.setFeedback("↵ Confirmar na TV")
-            tvClient.sendImeEnter()
+            client.setFeedback("↵ Confirmar na TV")
+            client.sendImeEnter()
         }
     }
 
@@ -392,15 +508,16 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return
         pulseIrLed()
+        val client = activeClient
         viewModelScope.launch {
             _isBusy.value = true
-            tvClient.setFeedback("Buscando \"$trimmed\" no YouTube...")
-            tvClient.searchAndLaunchYouTube(trimmed)
+            client.setFeedback("Buscando \"$trimmed\" no YouTube...")
+            client.searchAndLaunchYouTube(trimmed)
                 .onSuccess {
-                    tvClient.setFeedback("Reproduzindo \"$trimmed\" no YouTube!")
+                    client.setFeedback("Reproduzindo \"$trimmed\" no YouTube!")
                 }
                 .onFailure { err ->
-                    tvClient.setFeedback(err.message ?: "Erro ao buscar no YouTube")
+                    client.setFeedback(err.message ?: "Erro ao buscar no YouTube")
                 }
             _isBusy.value = false
         }
@@ -415,27 +532,28 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
 
     /**
      * Controle por Voz / IA pelo microfone do celular:
-     * Interpreta comandos naturais em português e aciona a função correspondente na TV.
+     * Interpreta comandos naturais em português e aciona a função correspondente na TV ativa.
      */
     fun onVoiceCommand(spokenText: String) {
         val raw = spokenText.trim()
         if (raw.isEmpty()) return
         val lower = raw.lowercase()
         pulseIrLed()
+        val client = activeClient
 
         viewModelScope.launch {
             _isBusy.value = true
-            tvClient.setFeedback("Voz: \"$raw\"")
+            client.setFeedback("Voz: \"$raw\"")
 
             // 1. Ligar / Desligar TV
             if (lower == "desligar" || lower.contains("desligar tv") || lower.contains("desligar a tv") || lower.contains("desliga a tv")) {
-                tvClient.powerOff()
+                client.powerOff()
                 _isBusy.value = false
                 return@launch
             }
             if (lower == "ligar" || lower.contains("ligar tv") || lower.contains("ligar a tv") || lower.contains("liga a tv")) {
-                val res = tvClient.togglePower()
-                res.onSuccess { tvClient.setFeedback(it) }
+                val res = client.togglePower()
+                res.onSuccess { client.setFeedback(it) }
                 _isBusy.value = false
                 return@launch
             }
@@ -452,9 +570,9 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
             if (volNumberMatch != null) {
                 val targetVol = volNumberMatch.groupValues[1].toIntOrNull()
                 if (targetVol != null) {
-                    tvClient.setVolume(targetVol)
-                        .onSuccess { tvClient.setFeedback("Volume ajustado para $targetVol") }
-                        .onFailure { tvClient.setFeedback("Falha ao ajustar volume") }
+                    client.setVolume(targetVol)
+                        .onSuccess { client.setFeedback("Volume ajustado para $targetVol") }
+                        .onFailure { client.setFeedback("Falha ao ajustar volume") }
                     _isBusy.value = false
                     return@launch
                 }
@@ -463,21 +581,21 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
             // 4. Aumentar / Diminuir volume
             if (lower.contains("aumentar volume") || lower.contains("subir volume") || lower.contains("mais alto") || lower.contains("aumenta o volume")) {
                 repeat(3) {
-                    tvClient.volumeUp()
+                    client.volumeUp()
                     delay(120)
                 }
-                tvClient.fetchAudioStatus()
-                tvClient.setFeedback("Volume aumentado")
+                client.fetchAudioStatus()
+                client.setFeedback("Volume aumentado")
                 _isBusy.value = false
                 return@launch
             }
             if (lower.contains("diminuir volume") || lower.contains("baixar volume") || lower.contains("abaixar volume") || lower.contains("mais baixo") || lower.contains("abaixa o volume")) {
                 repeat(3) {
-                    tvClient.volumeDown()
+                    client.volumeDown()
                     delay(120)
                 }
-                tvClient.fetchAudioStatus()
-                tvClient.setFeedback("Volume diminuído")
+                client.fetchAudioStatus()
+                client.setFeedback("Volume diminuído")
                 _isBusy.value = false
                 return@launch
             }
@@ -497,17 +615,17 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
             // 5. Navegação básica
             when (lower) {
                 "voltar", "retornar" -> {
-                    tvClient.sendButton("BACK")
+                    client.sendButton("BACK")
                     _isBusy.value = false
                     return@launch
                 }
                 "home", "início", "inicio", "menu inicial" -> {
-                    tvClient.sendButton("HOME")
+                    client.sendButton("HOME")
                     _isBusy.value = false
                     return@launch
                 }
                 "ok", "confirmar", "enter" -> {
-                    tvClient.sendButton("ENTER")
+                    client.sendButton("ENTER")
                     _isBusy.value = false
                     return@launch
                 }
@@ -515,13 +633,13 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
 
             // 6. Lives no YouTube (ex: "live do sbt", "assistir cazetv ao vivo")
             if (lower.contains("live ") || lower.contains("ao vivo")) {
-                val matchedShortcut = _shortcuts.value.firstOrNull { sc ->
+                val matchedShortcut = shortcuts.value.firstOrNull { sc ->
                     sc.actionType == ShortcutActionType.YOUTUBE_LIVE &&
                         lower.contains(sc.label.lowercase())
                 }
                 if (matchedShortcut != null) {
-                    tvClient.setFeedback("Abrindo live de ${matchedShortcut.label}...")
-                    tvClient.launchYouTubeUrl(matchedShortcut.target)
+                    client.setFeedback("Abrindo live de ${matchedShortcut.label}...")
+                    client.launchYouTubeUrl(matchedShortcut.target)
                     _isBusy.value = false
                     return@launch
                 }
@@ -539,10 +657,10 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
                     .trim()
 
                 if (channelExtract.isNotEmpty()) {
-                    tvClient.setFeedback("Abrindo live de \"$channelExtract\" no YouTube...")
-                    tvClient.launchYouTubeUrl(channelExtract)
-                        .onSuccess { tvClient.setFeedback("Live de \"$channelExtract\" aberta!") }
-                        .onFailure { tvClient.setFeedback("Não foi possível abrir a live") }
+                    client.setFeedback("Abrindo live de \"$channelExtract\" no YouTube...")
+                    client.launchYouTubeUrl(channelExtract)
+                        .onSuccess { client.setFeedback("Live de \"$channelExtract\" aberta!") }
+                        .onFailure { client.setFeedback("Não foi possível abrir a live") }
                     _isBusy.value = false
                     return@launch
                 }
@@ -559,7 +677,7 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
                     .trim()
 
                 // Verifica primeiro nos 9 atalhos
-                val shortcutMatch = _shortcuts.value.firstOrNull { sc ->
+                val shortcutMatch = shortcuts.value.firstOrNull { sc ->
                     sc.label.lowercase().contains(appSpoken) || appSpoken.contains(sc.label.lowercase())
                 }
                 if (shortcutMatch != null) {
@@ -573,8 +691,8 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
                     app.title.lowercase().contains(appSpoken) || appSpoken.contains(app.title.lowercase())
                 }
                 if (installedMatch != null) {
-                    tvClient.setFeedback("Abrindo ${installedMatch.title}...")
-                    tvClient.launchApp(installedMatch.appId)
+                    client.setFeedback("Abrindo ${installedMatch.title}...")
+                    client.launchApp(installedMatch.appId)
                     _isBusy.value = false
                     return@launch
                 }
@@ -592,21 +710,21 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
                 .trim()
 
             if (lower.contains("youtube") || lower.startsWith("pesquisar ") || lower.startsWith("buscar ") || lower.startsWith("tocar ")) {
-                tvClient.setFeedback("Buscando \"$ytCleaned\" no YouTube...")
-                tvClient.searchAndLaunchYouTube(ytCleaned)
-                    .onSuccess { tvClient.setFeedback("Reproduzindo \"$ytCleaned\" na TV!") }
-                    .onFailure { err -> tvClient.setFeedback(err.message ?: "Falha na busca do YouTube") }
+                client.setFeedback("Buscando \"$ytCleaned\" no YouTube...")
+                client.searchAndLaunchYouTube(ytCleaned)
+                    .onSuccess { client.setFeedback("Reproduzindo \"$ytCleaned\" na TV!") }
+                    .onFailure { err -> client.setFeedback(err.message ?: "Falha na busca do YouTube") }
                 _isBusy.value = false
                 return@launch
             }
 
             // 9. Caso contrário: tenta enviar o texto para o campo aberto na TV; se não houver, busca no YouTube
-            val textSent = tvClient.sendTextInput(raw, replace = false, pressEnter = true)
+            val textSent = client.sendTextInput(raw, replace = false, pressEnter = true)
             if (textSent.isSuccess) {
-                tvClient.setFeedback("Texto falado enviado: \"$raw\"")
+                client.setFeedback("Texto falado enviado: \"$raw\"")
             } else {
-                tvClient.setFeedback("Buscando \"$raw\" no YouTube...")
-                tvClient.searchAndLaunchYouTube(raw)
+                client.setFeedback("Buscando \"$raw\" no YouTube...")
+                client.searchAndLaunchYouTube(raw)
             }
             _isBusy.value = false
         }
@@ -619,35 +737,39 @@ class RemoteViewModel(application: Application) : AndroidViewModel(application) 
         hapticEnabled: Boolean,
         hardwareVolumeKeysEnabled: Boolean = true
     ) {
-        preferences.saveConfig(ip, mac, broadcast, hapticEnabled, hardwareVolumeKeysEnabled)
+        val brand = _activeBrand.value
+        val client = clientFor(brand)
+        preferences.saveConfig(brand, ip, mac, broadcast, hapticEnabled, hardwareVolumeKeysEnabled)
         _hapticEnabled.value = hapticEnabled
         _hardwareVolumeKeysEnabled.value = hardwareVolumeKeysEnabled
-        tvClient.refreshConfigFromPrefs()
-        tvClient.disconnect()
-        hasSyncedAppsThisSession = false
+        client.refreshConfigFromPrefs()
+        client.disconnect()
+        syncedBrandsThisSession.remove(brand)
         viewModelScope.launch {
-            tvClient.setFeedback("Reconectando em ${ip.trim()}...")
-            val res = tvClient.ensureConnected(2500)
+            client.setFeedback("Reconectando em ${ip.trim()}...")
+            val res = client.ensureConnected(2500)
             if (res.isSuccess) {
-                tvClient.setFeedback("Conectado à TV LG (${ip.trim()})")
-                refreshInstalledAppsSilent()
+                client.setFeedback("Conectado à ${brand.displayName} (${ip.trim()})")
+                refreshInstalledAppsSilent(brand)
             } else {
-                tvClient.setFeedback("Configurações salvas (TV em standby)")
+                client.setFeedback("Configurações salvas (TV em standby)")
             }
         }
     }
 
     fun onDiscoverTv(onDiscovered: (String) -> Unit) {
+        val brand = _activeBrand.value
+        val client = clientFor(brand)
         viewModelScope.launch {
-            tvClient.setFeedback("Buscando TV LG via SSDP...")
-            val found = TvSsdpDiscovery.discoverLgTv(3000)
+            client.setFeedback("Buscando ${brand.displayName} via SSDP...")
+            val found = TvSsdpDiscovery.discoverTv(brand, 3000)
             if (found != null) {
-                preferences.saveIpAddress(found.ip)
-                tvClient.refreshConfigFromPrefs()
-                tvClient.setFeedback("TV encontrada: ${found.friendlyName} (${found.ip})")
+                preferences.saveIpAddress(brand, found.ip)
+                client.refreshConfigFromPrefs()
+                client.setFeedback("TV encontrada: ${found.friendlyName} (${found.ip})")
                 onDiscovered(found.ip)
             } else {
-                tvClient.setFeedback("Nenhuma TV LG encontrada via SSDP (verifique se está ligada)")
+                client.setFeedback("Nenhuma ${brand.displayName} encontrada via SSDP")
             }
         }
     }
