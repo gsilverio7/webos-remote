@@ -263,7 +263,8 @@ fun PhysicalRedPowerButton(
     isTvOnline: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 62.dp
+    size: Dp = 62.dp,
+    isBlue: Boolean = false
 ) {
     val context = LocalContext.current
     val hapticEnabled = LocalHapticEnabled.current
@@ -276,6 +277,37 @@ fun PhysicalRedPowerButton(
         label = "powerOffset"
     )
 
+    val onlineGlowColor = if (isBlue) Color(0xFF3B82F6) else Color(0xFFEF4444)
+    val ambientShadowColor = if (isBlue) Color(0xFF1D4ED8) else Color(0xFFDC2626)
+
+    val bgColors = if (isBlue) {
+        if (isPressed) {
+            listOf(Color(0xFF1D4ED8), Color(0xFF1E3A8A))
+        } else {
+            listOf(Color(0xFF2563EB), Color(0xFF1D4ED8), Color(0xFF172554))
+        }
+    } else {
+        if (isPressed) {
+            listOf(Color(0xFFB91C1C), Color(0xFF7F1D1D))
+        } else {
+            listOf(Color(0xFFEF4444), Color(0xFFB91C1C), Color(0xFF881313))
+        }
+    }
+
+    val borderColors = if (isBlue) {
+        if (isPressed) {
+            listOf(Color(0xFF2563EB), Color(0xFF0F172A))
+        } else {
+            listOf(Color(0xFF93C5FD), Color(0xFF1E3A8A))
+        }
+    } else {
+        if (isPressed) {
+            listOf(Color(0xFFDC2626), Color(0xFF450A0A))
+        } else {
+            listOf(Color(0xFFFCA5A5), Color(0xFF7F1D1D))
+        }
+    }
+
     // Cavidade circular com anel metálico escuro
     Box(
         modifier = modifier
@@ -285,7 +317,7 @@ fun PhysicalRedPowerButton(
                 width = 1.5.dp,
                 brush = Brush.verticalGradient(
                     colors = if (isTvOnline) {
-                        listOf(Color(0xFFEF4444).copy(alpha = 0.55f), Color(0xFF1F2026))
+                        listOf(onlineGlowColor.copy(alpha = 0.55f), Color(0xFF1F2026))
                     } else {
                         listOf(Color(0xFF2B2D35), Color(0xFF121317))
                     }
@@ -302,28 +334,16 @@ fun PhysicalRedPowerButton(
                 .shadow(
                     elevation = if (isPressed) 2.dp else 8.dp,
                     shape = CircleShape,
-                    ambientColor = Color(0xFFDC2626),
+                    ambientColor = ambientShadowColor,
                     spotColor = Color.Black
                 )
                 .clip(CircleShape)
                 .background(
-                    brush = Brush.verticalGradient(
-                        colors = if (isPressed) {
-                            listOf(Color(0xFFB91C1C), Color(0xFF7F1D1D))
-                        } else {
-                            listOf(Color(0xFFEF4444), Color(0xFFB91C1C), Color(0xFF881313))
-                        }
-                    )
+                    brush = Brush.verticalGradient(colors = bgColors)
                 )
                 .border(
                     width = 1.2.dp,
-                    brush = Brush.verticalGradient(
-                        colors = if (isPressed) {
-                            listOf(Color(0xFFDC2626), Color(0xFF450A0A))
-                        } else {
-                            listOf(Color(0xFFFCA5A5), Color(0xFF7F1D1D))
-                        }
-                    ),
+                    brush = Brush.verticalGradient(colors = borderColors),
                     shape = CircleShape
                 )
                 .clickable(
