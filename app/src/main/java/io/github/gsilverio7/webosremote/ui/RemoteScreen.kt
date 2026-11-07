@@ -195,7 +195,7 @@ fun RemoteScreen(viewModel: RemoteViewModel) {
                             Spacer(modifier = Modifier.height(2.dp))
                             val volLabel = if (state.muted) "MUDO" else "VOL ${state.volume}"
                             Text(
-                                text = "${state.ipAddress} • $volLabel",
+                                text = "LG • $volLabel",
                                 color = Color(0xFF71717A),
                                 fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace,
