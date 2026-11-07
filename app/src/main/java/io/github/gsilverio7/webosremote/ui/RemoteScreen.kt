@@ -248,12 +248,49 @@ private fun RemoteControlUnit(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Corpo Físico do Controle Remoto (Chassi Preto Fosco com Borda Chanfrada)
+        val borderBrush = when (brand) {
+            TvBrand.LG -> Brush.verticalGradient(
+                0.0f to Color(0xFFFF3B5C),  // Luz vermelha incidente intensa no relevo superior
+                0.08f to Color(0xFFEF4444), // Glow vermelho vivo
+                0.22f to Color(0xFF881337), // Tom carmesim/vinho profundo na descida da luz
+                0.40f to Color(0xFF22242D), // Transição metálica escurecida
+                1.0f to Color(0xFF0E0F13)   // Base em sombra profunda
+            )
+            TvBrand.SAMSUNG -> Brush.verticalGradient(
+                0.0f to Color(0xFF38BDF8),  // Luz azul ciano brilhante no relevo superior
+                0.08f to Color(0xFF3B82F6), // Glow azul elétrico Samsung
+                0.22f to Color(0xFF1E3A8A), // Tom azul marinho profundo na descida da luz
+                0.40f to Color(0xFF22242D), // Transição metálica escurecida
+                1.0f to Color(0xFF0E0F13)   // Base em sombra profunda
+            )
+        }
+
+        val shadowSpotColor = when (brand) {
+            TvBrand.LG -> Color(0x66EF4444)
+            TvBrand.SAMSUNG -> Color(0x663B82F6)
+        }
+
+        val shadowAmbientColor = when (brand) {
+            TvBrand.LG -> Color(0x2BFF1744)
+            TvBrand.SAMSUNG -> Color(0x2B2979FF)
+        }
+
+        val brandActiveColor = when (brand) {
+            TvBrand.LG -> Color(0xFFEF4444)
+            TvBrand.SAMSUNG -> Color(0xFF3B82F6)
+        }
+
+        // Corpo Físico do Controle Remoto (Chassi Preto Fosco com Borda Chanfrada Iluminada)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
-                .shadow(20.dp, RoundedCornerShape(40.dp))
+                .shadow(
+                    elevation = 20.dp,
+                    shape = RoundedCornerShape(40.dp),
+                    spotColor = shadowSpotColor,
+                    ambientColor = shadowAmbientColor
+                )
                 .clip(RoundedCornerShape(40.dp))
                 .background(
                     brush = Brush.horizontalGradient(
@@ -267,13 +304,7 @@ private fun RemoteControlUnit(
                 )
                 .border(
                     width = 2.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF333640),
-                            Color(0xFF181920),
-                            Color(0xFF0E0F13)
-                        )
-                    ),
+                    brush = borderBrush,
                     shape = RoundedCornerShape(40.dp)
                 )
                 .verticalScroll(rememberScrollState())
@@ -377,7 +408,7 @@ private fun RemoteControlUnit(
                                             height = 5.dp
                                         )
                                         .background(
-                                            color = if (isCurrent) Color(0xFF22C55E) else Color(0xFF3F3F46),
+                                            color = if (isCurrent) brandActiveColor else Color(0xFF3F3F46),
                                             shape = CircleShape
                                         )
                                 )
